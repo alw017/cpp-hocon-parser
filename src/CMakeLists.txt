@@ -15,6 +15,8 @@ add_library(
     parser
     parser/parser.hpp
     parser/parser.cpp
+    parser/hocon-p.hpp
+    parser/hocon-p.cpp
 )
 
 
