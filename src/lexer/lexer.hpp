@@ -31,11 +31,14 @@ class Lexer {
         void addToken(TokenType type, double num);
         char peek();
         char peekNext();
-        void quoted_string();
-        void unquoted_string();
+        void quotedString();
+        void unquotedString(char c);
         void number();
         void comment();
         void whitespace();
+        void newline();
+        void pruneInlineWhitespace();
+        void pruneAllWhitespace();
         bool isDigit(char c);
         bool isAlpha(char c);
         bool isHex(char c);

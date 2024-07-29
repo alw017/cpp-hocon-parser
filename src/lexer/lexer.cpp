@@ -40,7 +40,7 @@ char Lexer::peek() {
     return source[current];
 }
 
-void Lexer::quoted_string() {
+void Lexer::quotedString() {
     std::stringstream ss{""};
     while (peek() != '"' && !atEnd()) {
         //std::cout << peek() << " ";
@@ -99,11 +99,12 @@ void Lexer::quoted_string() {
     addToken(QUOTED_STRING, ss.str());
 }
 
-void Lexer::unquoted_string() {
-    std::stringstream ss{""};
+void Lexer::unquotedString(char c) {
+    std::stringstream ss{""}; ss << c;
     while(!isForbiddenChar(peek()) && !atEnd()) {
         ss << advance();
         std::string s = ss.str();
+        std::cout << "string is: '" << s << "' on line" << std::to_string(line) << std::endl;
         if (s == "true") {
             addToken(TRUE);
             return;
@@ -121,10 +122,8 @@ void Lexer::unquoted_string() {
 
 bool Lexer::isForbiddenChar(char c) {
     return isWhitespace(c) || 
-            (c >= '!' && c <= '$') ||
-            (c == '&') ||
-            (c == '\'') ||
-            (c >= '*' && c <= ',') ||
+            (c >= '!' && c <= '$') || // ! " # $
+            (c >= '&' && c <= ',') || // & ' () * + ,
             (c == ':') ||
             (c == '=') ||
             (c == '?') || (c == '@') ||
@@ -133,8 +132,10 @@ bool Lexer::isForbiddenChar(char c) {
             (c == '{') ||
             (c == '}');
 }
-
-bool Lexer::isWhitespace(char c) {
+/*
+ * Checks if a given char is a whitespace. Includes newline.
+ */
+bool Lexer::isWhitespace(char c) { 
     return (c == ' ') || (c >= '\t' && c <= '\r') || (c >= 28 && c <= 31); //ascii decimal 28-31 are various separators.
 }
 
@@ -164,7 +165,7 @@ void Lexer::number() {
         isDouble = true;
     }
     if (true/*isDouble*/) {
-            addToken(NUMBER, std::strtod(source.substr(start,current-start).c_str(), nullptr));
+            addToken(NUMBER, std::strtod(source.substr(start, current-start).c_str(), nullptr));
     } else {
             addToken(NUMBER, std::stoi(source.substr(start, current-start)));
     }
@@ -185,26 +186,27 @@ char Lexer::peekNext() {
 void Lexer::scanToken() {
     char c = advance();
     switch(c) {
-        case '{': addToken(LEFT_BRACE); break;
-        case '}': addToken(RIGHT_BRACE); break;
-        case '[': addToken(LEFT_BRACKET); break;
-        case ']': addToken(RIGHT_BRACKET); break;
-        case ',': addToken(COMMA); break;
-        case ':': addToken(COLON); break;
+        case '{': addToken(LEFT_BRACE); pruneAllWhitespace(); break;
+        case '}': addToken(RIGHT_BRACE); pruneInlineWhitespace(); break;
+        case '[': addToken(LEFT_BRACKET); pruneAllWhitespace(); break;
+        case ']': addToken(RIGHT_BRACKET); pruneInlineWhitespace(); break;
+        case ',': addToken(COMMA); pruneAllWhitespace(); break;
+        case ':': addToken(COLON); pruneAllWhitespace(); break;
+        case '=': addToken(EQUAL); pruneAllWhitespace(); break;
         case ' ':
         case '\r':
         case '\t': whitespace(); break;
-        case '\n': addToken(NEWLINE); line++; break; // newline
+        case '\n': newline(); break; // newline
         case '/': 
             if (peek() == '/') {
                 advance(); // comment() assumes you start after the comment identifier
                 comment(); 
             } else {
-                unquoted_string(); 
+                unquotedString('/'); 
             }
             break;
         case '#': comment(); break;
-        case '"': quoted_string(); break;
+        case '"': quotedString(); break;
         case '-': number(); break;
         case '+':
             if (peek() == '=') {
@@ -215,14 +217,15 @@ void Lexer::scanToken() {
                 error(line, "Expected =, got " + s);
             } break;
         case '$': addToken(DOLLAR); break;
-        case '=': addToken(EQUAL); break;
         case '?': addToken(QUESTION); break;
-        case '.': addToken(PERIOD); break;
+        case '(': addToken(LEFT_PAREN); break;
+        case ')': addToken(RIGHT_PAREN); break;
+        case '.': unquotedString(c); break;
         default:
             if (isDigit(c)) {
                 number();
             } else if (isAlpha(c)) {
-                unquoted_string();
+                unquotedString(c);
             } else {
                 std::string s(1, c);
                 error(line, "Unexpected character: " + s + " " + std::to_string(c));
@@ -230,6 +233,26 @@ void Lexer::scanToken() {
             break;
     }
 }
+
+void Lexer::newline() {
+    pruneAllWhitespace();
+    addToken(NEWLINE);
+}
+
+void Lexer::pruneInlineWhitespace() { // prunes all whitespace excluding newline.
+    while (isWhitespace(peek()) && peek() != '\n' && !atEnd()) {
+        advance();
+    }
+}
+
+void Lexer::pruneAllWhitespace() { // prunes all whitespace, including newline.
+    while (isWhitespace(peek()) && !atEnd()) {
+        advance(); // pruning some whitespace that will always be ignored.
+        if (peek() == '\n') line++;
+    }
+}
+
+
 
 void Lexer::comment() {
     while (peek() != '\n' && !atEnd()) { // stop before the new line so the switch statement can catch the newline.
