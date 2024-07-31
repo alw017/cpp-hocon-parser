@@ -287,11 +287,12 @@ bool Lexer::run() {
     }
 
     tokens.push_back(Token(ENDFILE, "EOF", "", line));
-    return true;
+    return !hasError;
 }
 
 void Lexer::error(int line, std::string message) {
     report(line, "", message);
+    hasError = true;
 }
 
 void Lexer::report(int line, std::string where, std::string message) {

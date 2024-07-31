@@ -12,7 +12,7 @@ class Lexer {
         Lexer(std::string text, std::vector<Token>& list);
         bool run();
     private:
-        int start = 0;
+        int start = 0; //TODO Refactor to size_t later.
         int current = 0;
         int line = 1;
         int length;

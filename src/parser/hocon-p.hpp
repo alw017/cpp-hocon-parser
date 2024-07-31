@@ -4,28 +4,74 @@
 #include <unordered_map>
 #include <memory>
 
+struct HArray;
+struct HSimpleValue;
+struct HKey;
+
+struct HTree {
+    std::unordered_map<HKey *, std::variant<HTree*, HArray*, HSimpleValue*>> members;
+    HTree();
+    ~HTree();
+    void addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value);
+};
+
+struct HArray {
+    std::vector<std::variant<HTree*, HArray*, HSimpleValue*>> elements;
+    HArray();
+    ~HArray();
+    void addElement(std::variant<HTree*, HArray*, HSimpleValue*> val);
+};
+
+struct HSimpleValue {
+    std::variant<int, double, bool, std::string> svalue; 
+    HSimpleValue(std::variant<int, double, bool, std::string> s);
+};
+
+struct HKey {
+    std::string key;
+    std::vector<Token> tokens;
+    HKey(std::string k, std::vector<Token> t);
+};
+
+struct HSubstitution {
+    std::string path;
+    HSubstitution(std::string s);
+    ~HSubstitution();
+};
+
 class HParser {
     private:
         //file properties
         bool rootBrace = true; // rootBrace must be true if the root object is HArray.
         bool validConf = true;
-        std::variant<HTree, HArray> rootObject;
+        std::variant<HTree *, HArray *> rootObject;
+        std::vector<Token> tokenList;
+        int start = 0;      // refactor to size_t later.
+        int current = 0;
+        int length;
 
         //look ahead/back
         Token peek();
         Token peekNext();
         Token previous();
         bool check(TokenType type);
+        bool check(std::vector<TokenType> types);
+
+        //state checking
+        bool atEnd();
         
         //consume
         Token advance();
         bool match(TokenType type);
         bool match(std::vector<TokenType> type);
+        void ignoreAllWhitespace();
+        void advanceToNextLine();
 
         //create parsed objects :: Assignment
         HTree * hoconTree();
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
+        HKey * hoconKey();
 
         //object merge/concatenation
         HTree * mergeTrees(HTree * first, HTree * second);
@@ -37,37 +83,22 @@ class HParser {
         //parsing steps:
         void parseTokens(); // first pass, creating AST and merging whenever possible.
         void resolveSubstitutions(); // second pass, resolving substitutions and resolving the remaining merges dependent on substitutions.
+        /*
+         * Note: to do substitutions, we need to keep an auxillary file keeping track of all object member additions and modifications
+         * also, we need to give the substitution a handle on where to enter the file, if it is a self referential substitution.
+         */
+        //access methods:
+        std::variant<HTree*, HArray*> getRoot();
+        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
+
 
         //error reporting
         void error(int line, std::string message);
         void report(int line, std::string where, std::string message);
     public:
-        void run(); 
-        HParser();
+        bool run(); 
+        HParser(std::vector<Token> tokens): tokenList(tokens), length(tokens.size()) {};
         ~HParser();
 };
 
 
-class HTree {
-    std::unordered_map<std::string, std::variant<HTree, HArray, HSimpleValue>> members;
-    HTree() : members(std::unordered_map<std::string, std::variant<HTree, HArray, HSimpleValue>>()) {}
-    ~HTree();
-    void addMember(std::variant<HTree, HArray, HSimpleValue> val);
-};
-
-class HArray {
-    std::vector<std::variant<HTree, HArray, HSimpleValue>> elements;
-    HArray() : elements(std::vector<std::variant<HTree, HArray, HSimpleValue>>()) {}
-    ~HArray();
-    void addMember(std::variant<HTree, HArray, HSimpleValue> val);
-};
-
-class HSimpleValue {
-    std::variant<int, double, bool, std::string> svalue;
-    HSimpleValue (std::variant<int, double, bool, std::string> s): svalue(s) {}
-    ~HSimpleValue();
-};
-
-class HSubstitution {
-
-};

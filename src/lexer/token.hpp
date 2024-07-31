@@ -14,6 +14,9 @@ enum TokenType {
     ENDFILE
 };
 
+const std::vector<TokenType> SIMPLE_VALUES {QUOTED_STRING, UNQUOTED_STRING, NUMBER, TRUE, FALSE, NULLVALUE}; 
+const std::vector<TokenType> KEY_VALUE_SEP {EQUAL, COLON};
+
 // note this may be better defined as a struct.
 class Token {
     public:
