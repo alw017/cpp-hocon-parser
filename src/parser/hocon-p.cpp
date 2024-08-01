@@ -20,12 +20,20 @@ HTree::~HTree() {
     }
 }
 
+void HTree::addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
+    members.insert(std::make_pair(key, value));
+}
+
 HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
 HArray::~HArray() {
     for (auto e : elements) {
         std::visit(deleteHObj, e);
     }
+}
+
+void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
+    elements.push_back(val);
 }
 
 HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s): svalue(s) {}
@@ -86,18 +94,26 @@ bool HParser::match(TokenType type) {
     }
 }
 
-void HParser::ignoreAllWhitespace() {
-    while(check(WHITESPACE) || check(NEWLINE)) {
-        advance();
-    }
-}
-
 bool HParser::match(std::vector<TokenType> types) {
     if(check(types)) {
         advance();
         return true;
     } else return false;
 }
+
+
+void HParser::ignoreAllWhitespace() {
+    while(check(WHITESPACE) || check(NEWLINE)) {
+        advance();
+    }
+}
+
+void HParser::ignoreInlineWhitespace() {
+    while(check(WHITESPACE)) {
+        advance();
+    }
+}
+
 
 void HParser::advanceToNextLine() {
     while(!check(NEWLINE) && !atEnd()) {
@@ -114,27 +130,63 @@ void HParser::advanceToNextLine() {
 */
 HTree * HParser::hoconTree() { 
     HTree * output = new HTree();
-    ignoreAllWhitespace();
-    while(!match(RIGHT_BRACE)) { // empty object case
+    while(!match(RIGHT_BRACE)) { // loop through members
+        if(atEnd()) {
+            error(peek().line, "Imbalanced {}");
+            break;
+        }
         HKey * key = hoconKey(); 
         if (match(LEFT_BRACE)) {
-            output->addMember(key, hoconTree()); // implied separator case. ex: foo {}
+            HTree * curr = hoconTree(); // ends after consuming right brace.
+            while (match(LEFT_BRACE)) {
+                //curr = mergeTrees(curr, hoconTree());
+                hoconTree();
+            }
+            output->addMember(key, curr); // implied separator case. ex: foo {}
+            ignoreAllWhitespace();
+            // need to add object concatentation here.
         } else if(match(KEY_VALUE_SEP)) {
             ignoreAllWhitespace();
             if (match(LEFT_BRACE)) {
                 output->addMember(key, hoconTree());
+                ignoreAllWhitespace();
             } else if (match(LEFT_BRACKET)) {
-                output->addMember(key, hoconArray());
+                //output->addMember(key, hoconArray());
+                ignoreAllWhitespace();
             } else {   
-                output->addMember(key, hoconSimpleValue());
+                //output->addMember(key, hoconSimpleValue());
+                ignoreAllWhitespace();
             }
         } else {
             error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
         }
-
     }
     return output;
 }
+
+/* 
+    Assume you have just consumed the k-v separator. Consume until newline or comma.
+*/
+HSimpleValue * HParser::hoconSimpleValue() {
+    std::vector<Token> valTokens = std::vector<Token>();
+    do {
+        if (check(SIMPLE_VALUES) || check(WHITESPACE)) {
+            valTokens.push_back(advance());
+        } else {
+            error(peek().line, "Expected a simple value, got " + peek().lexeme);
+            return new HSimpleValue(0);
+            // put error recovery later. maybe in HParser::error() and not here specifically.
+        }   
+    } while(!check(std::vector<TokenType> {COMMA, NEWLINE}));
+    if (valTokens.size() > 1) { // value concat
+        
+    } else if (valTokens.size() == 1) { // parse normally
+
+    } else {
+        error(peek().line, "Expected a value, got nothing");
+    }
+}
+
 
 /* 
     Checks if the tokens up to a key-value separator make a valid key. Consumes up to but not including the separator.
@@ -150,10 +202,11 @@ HKey * HParser::hoconKey() {
             keyTokens.push_back(advance());
         } else {
             error(peek().line, "Expected a simple value, got " + peek().lexeme);
+            return new HKey(ss.str(), keyTokens);
             // put error recovery later. maybe in HParser::error() and not here specifically.
         }   
     } while(!(check(KEY_VALUE_SEP) || check(std::vector<TokenType> {LEFT_BRACE, NEWLINE}))); // newline implies one of { : =, otherwise it's an error. left brace is implicit separator.
-    ignoreAllWhitespace();
+    ignoreAllWhitespace(); // for newline case only.
     while ((keyTokens.end() - 1)->type == WHITESPACE) {
         keyTokens.pop_back();
     }
@@ -171,7 +224,7 @@ HKey * HParser::hoconKey() {
 
 void HParser::parseTokens() {
     if (match(LEFT_BRACKET)) { // root array
-        rootObject = hoconArray();
+        //rootObject = hoconArray();
     } else { // if not array, implicitly assumed to be object.
         rootBrace = match(LEFT_BRACE);
         rootObject = hoconTree();

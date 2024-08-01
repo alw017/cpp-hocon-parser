@@ -16,8 +16,8 @@ char Lexer::advance() {
 
 void Lexer::addToken(TokenType type) {
     std::string text = source.substr(start, current-start);
-    if (type == WHITESPACE) text = "'" + text + "'";
-    tokens.push_back(Token(type, text, "", line));
+    //if (type == WHITESPACE) text = "'" + text + "'"; debug
+    tokens.push_back(Token(type, text, "", line)); 
 }
 
 void Lexer::addToken(TokenType type, std::string literal) {
@@ -104,7 +104,7 @@ void Lexer::unquotedString(char c) {
     while(!isForbiddenChar(peek()) && !atEnd()) {
         ss << advance();
         std::string s = ss.str();
-        std::cout << "string is: '" << s << "' on line" << std::to_string(line) << std::endl;
+        //std::cout << "string is: '" << s << "' on line" << std::to_string(line) << std::endl;
         if (s == "true") {
             addToken(TRUE);
             return;
@@ -216,7 +216,20 @@ void Lexer::scanToken() {
                 std::string s(1, peek());
                 error(line, "Expected =, got " + s);
             } break;
-        case '$': addToken(DOLLAR); break;
+        case '$': 
+            if (peek() == '{') {
+                advance();
+                if(peek() == '?') {
+                    advance();
+                    addToken(SUB_OPTIONAL_BEGIN);
+                } else {
+                    addToken(SUB_BEGIN);
+                }
+            } else {
+                std::string s(1, peek());
+                error(line, "Expected { after $, got " + s);
+            }
+            break;
         case '?': addToken(QUESTION); break;
         case '(': addToken(LEFT_PAREN); break;
         case ')': addToken(RIGHT_PAREN); break;
@@ -242,6 +255,9 @@ void Lexer::newline() {
 void Lexer::pruneInlineWhitespace() { // prunes all whitespace excluding newline.
     while (isWhitespace(peek()) && peek() != '\n' && !atEnd()) {
         advance();
+        if (peek() == '#' || (peek() == '/' && peekNext() == '/') ) {
+            comment();
+        }
     }
 }
 
@@ -249,6 +265,9 @@ void Lexer::pruneAllWhitespace() { // prunes all whitespace, including newline.
     while (isWhitespace(peek()) && !atEnd()) {
         advance(); // pruning some whitespace that will always be ignored.
         if (peek() == '\n') line++;
+        else if (peek() == '#' || (peek() == '/' && peekNext() == '/') ) {
+            comment();
+        }
     }
 }
 

@@ -40,7 +40,7 @@ struct HSubstitution {
 };
 
 class HParser {
-    private:
+    public: // change to private later
         //file properties
         bool rootBrace = true; // rootBrace must be true if the root object is HArray.
         bool validConf = true;
@@ -63,8 +63,9 @@ class HParser {
         //consume
         Token advance();
         bool match(TokenType type);
-        bool match(std::vector<TokenType> type);
+        bool match(std::vector<TokenType> types);
         void ignoreAllWhitespace();
+        void ignoreInlineWhitespace();
         void advanceToNextLine();
 
         //create parsed objects :: Assignment

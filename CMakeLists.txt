@@ -12,11 +12,15 @@ project(HOCONParser VERSION 1.0
 
 add_subdirectory(src)
 add_executable(main main.cpp)
+add_executable(test test.cpp)
+
+set_property(TARGET main PROPERTY CXX_STANDARD 17)
 
 target_link_libraries(reader lexer)
 target_link_libraries(parser lexer)
 target_link_libraries(reader parser)
 target_link_libraries(main reader)
 target_link_libraries(main parser)
-
-
+target_link_libraries(test reader)
+target_link_libraries(test parser)
+target_link_libraries(test lexer)
