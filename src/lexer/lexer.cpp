@@ -149,6 +149,10 @@ bool Lexer::isHex(char c) {
         (c >= 'A' && c <= 'F'); 
 }
 
+bool Lexer::isNextSequenceComment() {
+    return peek() == '#' || (peek() == '/' && peekNext() == '/');
+}
+
 void Lexer::number() {
     bool isDouble = false;
     while(isDigit(peek())) advance();
@@ -248,29 +252,36 @@ void Lexer::scanToken() {
 }
 
 void Lexer::newline() {
-    pruneAllWhitespace();
+    pruneWsAndComments();
     addToken(NEWLINE);
 }
 
 void Lexer::pruneInlineWhitespace() { // prunes all whitespace excluding newline.
     while (isWhitespace(peek()) && peek() != '\n' && !atEnd()) {
         advance();
-        if (peek() == '#' || (peek() == '/' && peekNext() == '/') ) {
-            comment();
-        }
     }
 }
 
 void Lexer::pruneAllWhitespace() { // prunes all whitespace, including newline.
+    //std::cout << "trying to prune: '" << peek() << "'" << std::endl;
     while (isWhitespace(peek()) && !atEnd()) {
         advance(); // pruning some whitespace that will always be ignored.
-        if (peek() == '\n') line++;
-        else if (peek() == '#' || (peek() == '/' && peekNext() == '/') ) {
+        if (peek() == '\n') {
+            line++;
+        }
+    }
+    //std::cout << std::endl;
+}
+
+void Lexer::pruneWsAndComments() {
+    while (isNextSequenceComment() || isWhitespace(peek())) {
+        if (isNextSequenceComment()) {
             comment();
+        } else {
+            pruneAllWhitespace();
         }
     }
 }
-
 
 
 void Lexer::comment() {

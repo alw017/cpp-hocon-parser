@@ -74,20 +74,21 @@ void ConfigFile::runFile() {
     }
     std::cout << "lexer finished." << std::endl;
     for (Token t : tokens) {
-        //std::cout << t.str() << std::endl;
+        std::cout << t.str() << std::endl;
     }
 
     HParser parser = HParser(tokens);
     parser.advance();
-    HTree * tree = parser.hoconTree();
+    //HTree * tree = parser.hoconTree();
     if (!parser.validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
         return;
     }
+    
+    /*
     for (auto t : tree->members) {
             std::cout << t.first->key << " : " << std::endl;
     }
-    /*
     Parser parser = Parser(tokens);
     if (parser.parseTokens()) {
             //std::cout << std::to_string(parser.valid) << std::endl;

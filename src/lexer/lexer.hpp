@@ -11,7 +11,7 @@ class Lexer {
     public:
         Lexer(std::string text, std::vector<Token>& list);
         bool run();
-    private:
+    //private: temporary to dbug.
         int start = 0; //TODO Refactor to size_t later.
         int current = 0;
         int line = 1;
@@ -39,10 +39,12 @@ class Lexer {
         void newline();
         void pruneInlineWhitespace();
         void pruneAllWhitespace();
+        void pruneWsAndComments();
         bool isDigit(char c);
         bool isAlpha(char c);
         bool isHex(char c);
         bool isWhitespace(char c);
         bool isForbiddenChar(char c);
+        bool isNextSequenceComment();
         void keyword();
 };
