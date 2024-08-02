@@ -301,23 +301,22 @@ HKey * HParser::hoconKey() {
     ignoreAllWhitespace();
     std::vector<Token> keyTokens = std::vector<Token>();
     std::stringstream ss {""};
-    do {
-        if (check(SIMPLE_VALUES) || check(WHITESPACE)) {
-            keyTokens.push_back(advance());
-        } else {
-            error(peek().line, "Expected a simple value, got " + peek().lexeme);
-            consumeMember();
-            return new HKey(ss.str(), keyTokens);
-            // put error recovery later. maybe in HParser::error() and not here specifically.
-        }   
-    } while(!(check(KEY_VALUE_SEP) || check(std::vector<TokenType> {LEFT_BRACE, NEWLINE}))); // newline implies one of { : =, otherwise it's an error. left brace is implicit separator.
+    while(check(SIMPLE_VALUES) || check(WHITESPACE)) {
+        keyTokens.push_back(advance());
+    } // newline implies one of { : =, otherwise it's an error. left brace is implicit separator.
     ignoreAllWhitespace(); // for newline case only.
-    while ((keyTokens.end() - 1)->type == WHITESPACE) {
-        keyTokens.pop_back();
+    if (keyTokens.size() > 0) { // value concat, parse as string
+        while ((keyTokens.end() - 1)->type == WHITESPACE) {
+            keyTokens.pop_back();
+        }
+        for (auto t : keyTokens) {
+            ss << t.lexeme;
+        }
+    } else {
+        error(peek().line, "Expected a value, got nothing");
+        return new HKey("", keyTokens);
     }
-    for (auto t : keyTokens) {
-        ss << t.lexeme;
-    }
+
     return new HKey(ss.str(), keyTokens);
 }
 
