@@ -29,6 +29,7 @@ class Lexer {
         void addToken(TokenType type, std::string str);
         void addToken(TokenType type, int num);
         void addToken(TokenType type, double num);
+        void addToken(TokenType type, bool b);
         char peek();
         char peekNext();
         void quotedString();

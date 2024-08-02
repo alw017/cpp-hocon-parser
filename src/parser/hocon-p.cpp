@@ -12,6 +12,13 @@ auto deleteHObj = Overload {
     [](HSimpleValue * val) {},
 };
 
+auto stringify = Overload {                                     
+    [](HTree * obj) { return obj->str(); },
+    [](HArray * arr) { return arr->str(); },
+    [](HSimpleValue * val) { return val->str(); },
+};
+
+
 HTree::HTree() : members(std::unordered_map<HKey *, std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
 HTree::~HTree() {
@@ -24,6 +31,28 @@ void HTree::addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> v
     members.insert(std::make_pair(key, value));
 }
 
+std::string HTree::str() {
+    std::string out = "{\n";
+    for(auto pair : members) {
+        out += "\t" + pair.first->key + " : ";
+        if (std::holds_alternative<HTree*>(pair.second)) {
+            std::string string = std::get<HTree*>(pair.second)->str();
+            std::stringstream ss(string);
+            std::string word;
+            std::getline(ss, word, '\n');
+            out += word + "\n";
+            while (!ss.eof()) {
+                std::getline(ss, word, '\n');
+                out += "\t" + word + "\n"; 
+            }
+        } else {
+            out += std::visit(stringify, pair.second) + "\n";
+        }
+    }
+    out += "}";
+    return out;
+}
+
 HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
 HArray::~HArray() {
@@ -32,11 +61,23 @@ HArray::~HArray() {
     }
 }
 
+std::string HArray::str() {
+    return "[]";
+}
+
 void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
     elements.push_back(val);
 }
 
-HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s): svalue(s) {}
+HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts): svalue(s), tokenParts(tokenParts) {}
+
+std::string HSimpleValue::str() {
+    std::string output;
+    for (auto t : tokenParts) {
+        output += t.lexeme;
+    }
+    return output;
+}
 
 HKey::HKey(std::string k, std::vector<Token> t) : key(k), tokens(t) {}
 
@@ -114,15 +155,57 @@ void HParser::ignoreInlineWhitespace() {
     }
 }
 
-
 void HParser::advanceToNextLine() {
     while(!check(NEWLINE) && !atEnd()) {
         advance();
     }
 }
 
+/* 
+    Helper method to consume all tokens until the next member. 
+*/
+void HParser::consumeToNextMember() {
+    ignoreAllWhitespace();
+    if(match(COMMA)) {
+        ignoreAllWhitespace();
+    }
+}
+
 // create parsed objects :: assignment
 
+/*
+    Attempts to create a hocon object with the following tokens, consuming all tokens including the ending '}'.
+    Assumes you are within the object, after the first {
+*/
+HTree * HParser::rootTree() { 
+    HTree * output = new HTree();
+    while(!atEnd()) { // loop through members
+        HKey * key = hoconKey(); 
+        if (match(LEFT_BRACE)) {
+            HTree * curr = hoconTree(); // ends after consuming right brace.
+            while (match(LEFT_BRACE)) {
+                //curr = mergeTrees(curr, hoconTree());
+                hoconTree();
+            }
+            output->addMember(key, curr); // implied separator case. ex: foo {}
+            ignoreAllWhitespace();
+            // need to add object concatentation here.
+        } else if(match(KEY_VALUE_SEP)) {
+            ignoreAllWhitespace();
+            if (match(LEFT_BRACE)) {
+                output->addMember(key, hoconTree());
+            } else if (match(LEFT_BRACKET)) {
+                //output->addMember(key, hoconArray());
+            } else {   
+                output->addMember(key, hoconSimpleValue());
+            }
+            consumeToNextMember();
+        } else {
+            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
+        }
+    }
+    return output;
+}
 
 /*
     Attempts to create a hocon object with the following tokens, consuming all tokens including the ending '}'.
@@ -149,14 +232,12 @@ HTree * HParser::hoconTree() {
             ignoreAllWhitespace();
             if (match(LEFT_BRACE)) {
                 output->addMember(key, hoconTree());
-                ignoreAllWhitespace();
             } else if (match(LEFT_BRACKET)) {
                 //output->addMember(key, hoconArray());
-                ignoreAllWhitespace();
             } else {   
-                //output->addMember(key, hoconSimpleValue());
-                ignoreAllWhitespace();
+                output->addMember(key, hoconSimpleValue());
             }
+            consumeToNextMember();
         } else {
             error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
         }
@@ -174,16 +255,24 @@ HSimpleValue * HParser::hoconSimpleValue() {
             valTokens.push_back(advance());
         } else {
             error(peek().line, "Expected a simple value, got " + peek().lexeme);
-            return new HSimpleValue(0);
+            return new HSimpleValue(0, valTokens);
             // put error recovery later. maybe in HParser::error() and not here specifically.
         }   
     } while(!check(std::vector<TokenType> {COMMA, NEWLINE}));
-    if (valTokens.size() > 1) { // value concat
-        
+    if (valTokens.size() > 1) { // value concat, parse as string
+        std::stringstream ss {""};
+        while ((valTokens.end() - 1)->type == WHITESPACE) {
+            valTokens.pop_back();
+        }
+        for (auto t : valTokens) {
+            ss << t.lexeme;
+        }
+        return new HSimpleValue(ss.str(), valTokens);
     } else if (valTokens.size() == 1) { // parse normally
-
+        return new HSimpleValue(valTokens.begin()->literal, valTokens);
     } else {
         error(peek().line, "Expected a value, got nothing");
+        return new HSimpleValue(0, valTokens);
     }
 }
 
@@ -227,7 +316,16 @@ void HParser::parseTokens() {
         //rootObject = hoconArray();
     } else { // if not array, implicitly assumed to be object.
         rootBrace = match(LEFT_BRACE);
-        rootObject = hoconTree();
+        ignoreAllWhitespace();
+        if (rootBrace) {
+            rootObject = hoconTree();
+        } else {
+            rootObject = rootTree();
+        }
+        ignoreAllWhitespace();
+        if (!atEnd()){
+            error(peek().line, "Expected EOF, got " + peek().lexeme);
+        }
     }
 }
 

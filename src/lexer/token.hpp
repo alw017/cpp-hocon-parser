@@ -23,8 +23,8 @@ class Token {
         const TokenType type;
         const std::string lexeme;
         const int line;
-        const std::variant<double, int, std::string> literal;
+        const std::variant<int, double, bool, std::string> literal;
 
-        Token(TokenType type, std::string lexeme, std::variant<double, int, std::string> literal, int line) : type(type), lexeme(lexeme), literal(literal), line(line) {}
+        Token(TokenType type, std::string lexeme, std::variant<int, double, bool, std::string> literal, int line) : type(type), lexeme(lexeme), literal(literal), line(line) {}
         std::string str();
 };

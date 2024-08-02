@@ -35,6 +35,11 @@ void Lexer::addToken(TokenType type, double literal) {
     tokens.push_back(Token(type, text, literal, line));
 }
 
+void Lexer::addToken(TokenType type, bool b) {
+    std::string text = source.substr(start, current-start);
+    tokens.push_back(Token(type, text, b, line));
+}
+
 char Lexer::peek() {
     if (atEnd()) return '\0';
     return source[current];
@@ -294,7 +299,7 @@ void Lexer::keyword() {
     while (isAlpha(peek())) advance() ;
     std::string text = source.substr(start, current - start);
     if (text == "true") {
-        addToken(TRUE);
+        addToken(TRUE, true);
     } else if (text == "false") {
         addToken(FALSE);
     } else if (text == "null") {

@@ -14,8 +14,6 @@ add_subdirectory(src)
 add_executable(main main.cpp)
 add_executable(test test.cpp)
 
-set_property(TARGET main PROPERTY CXX_STANDARD 17)
-
 target_link_libraries(reader lexer)
 target_link_libraries(parser lexer)
 target_link_libraries(reader parser)

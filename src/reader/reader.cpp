@@ -78,11 +78,18 @@ void ConfigFile::runFile() {
     }
 
     HParser parser = HParser(tokens);
-    parser.advance();
-    //HTree * tree = parser.hoconTree();
+    parser.parseTokens();
     if (!parser.validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
         return;
+    }
+
+    if(std::holds_alternative<HTree*>(parser.rootObject)) {
+        HTree* p = std::get<HTree*>(parser.rootObject);
+        for (auto pair : p->members) {
+            std::cout << pair.first->key << std::endl;
+        }
+        std::cout << "Root Object String: \n" << p->str() << std::endl;
     }
     
     /*

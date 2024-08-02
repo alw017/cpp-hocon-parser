@@ -7,7 +7,10 @@
 bool ASSERT_STRING(std::string str, std::string expect) {
     if (str == expect) {
         return true;
-    } return false;
+    } else {
+        std::cout << "expected " << expect << ", got " << str << std::endl;
+        return false;
+    }
 }
 
 bool ASSERT(std::string str, std::string expect) {
@@ -30,8 +33,23 @@ void test_parser_hoconKey() {
     }
 }
 
+void test_parser_hoconSimpleValue() {
+    std::vector<Token> tokens = std::vector<Token>();
+    Lexer lexer = Lexer("testvalue 214 true false m\n,", tokens);
+    lexer.run();
+    HParser parser = HParser(tokens);
+    HSimpleValue * v = parser.hoconSimpleValue();
+    bool succeed = ASSERT_STRING(v->str(), "testvalue 214 true false m");
+    if (succeed) {
+        std::cout << "hoconSimpleValue() succeeded" << std::endl;
+    } else {
+        std::cout << "hoconSimpleValue() failed" << std::endl;
+    }
+}
+
 int main() {
     std::cout << "starting tests" << std::endl;
     test_parser_hoconKey();
+    test_parser_hoconSimpleValue();
 }
 

@@ -13,6 +13,7 @@ struct HTree {
     HTree();
     ~HTree();
     void addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value);
+    std::string str();
 };
 
 struct HArray {
@@ -20,11 +21,14 @@ struct HArray {
     HArray();
     ~HArray();
     void addElement(std::variant<HTree*, HArray*, HSimpleValue*> val);
+    std::string str();
 };
 
 struct HSimpleValue {
     std::variant<int, double, bool, std::string> svalue; 
-    HSimpleValue(std::variant<int, double, bool, std::string> s);
+    std::vector<Token> tokenParts;
+    HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts);
+    std::string str();
 };
 
 struct HKey {
@@ -67,8 +71,10 @@ class HParser {
         void ignoreAllWhitespace();
         void ignoreInlineWhitespace();
         void advanceToNextLine();
+        void consumeToNextMember();
 
         //create parsed objects :: Assignment
+        HTree * rootTree();
         HTree * hoconTree();
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
