@@ -32,9 +32,10 @@ void HTree::addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> v
 }
 
 std::string HTree::str() {
+    const std::string INDENT = "    ";
     std::string out = "{\n";
     for(auto pair : members) {
-        out += "\t" + pair.first->key + " : ";
+        out += INDENT + pair.first->key + " : ";
         if (std::holds_alternative<HTree*>(pair.second)) {
             std::string string = std::get<HTree*>(pair.second)->str();
             std::stringstream ss(string);
@@ -43,7 +44,7 @@ std::string HTree::str() {
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += "\t" + word + "\n"; 
+                out += INDENT + word + "\n"; 
             }
         } else {
             out += std::visit(stringify, pair.second) + "\n";
@@ -154,9 +155,11 @@ void HParser::ignoreInlineWhitespace() {
         advance();
     }
 }
-
-void HParser::advanceToNextLine() {
-    while(!check(NEWLINE) && !atEnd()) {
+/*
+    panic mode method to consume until the next member to parse.
+*/
+void HParser::consumeMember() {
+    while(!check(std::vector<TokenType>{NEWLINE, COMMA, RIGHT_BRACE}) && !atEnd()) {
         advance();
     }
 }
@@ -168,8 +171,24 @@ void HParser::consumeToNextMember() {
     ignoreAllWhitespace();
     if(match(COMMA)) {
         ignoreAllWhitespace();
+    } 
+    if (!check(SIMPLE_VALUES) && !check(RIGHT_BRACE)) {
+        error(peek().line, "Unexpected symbol " + peek().lexeme + " after member");
+        consumeMember();
     }
 }
+
+void HParser::consumeToNextRootMember() {
+    ignoreAllWhitespace();
+    if(match(COMMA)) {
+        ignoreAllWhitespace();
+    } 
+    if (!check(SIMPLE_VALUES) && !atEnd()) {
+        error(peek().line, "Unexpected symbol " + peek().lexeme + " after member");
+        consumeMember();
+    }
+}
+
 
 // create parsed objects :: assignment
 
@@ -199,9 +218,10 @@ HTree * HParser::rootTree() {
             } else {   
                 output->addMember(key, hoconSimpleValue());
             }
-            consumeToNextMember();
+            consumeToNextRootMember();
         } else {
             error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
+            consumeToNextRootMember();
         }
     }
     return output;
@@ -240,6 +260,7 @@ HTree * HParser::hoconTree() {
             consumeToNextMember();
         } else {
             error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
+            consumeMember();
         }
     }
     return output;
@@ -250,15 +271,9 @@ HTree * HParser::hoconTree() {
 */
 HSimpleValue * HParser::hoconSimpleValue() {
     std::vector<Token> valTokens = std::vector<Token>();
-    do {
-        if (check(SIMPLE_VALUES) || check(WHITESPACE)) {
-            valTokens.push_back(advance());
-        } else {
-            error(peek().line, "Expected a simple value, got " + peek().lexeme);
-            return new HSimpleValue(0, valTokens);
-            // put error recovery later. maybe in HParser::error() and not here specifically.
-        }   
-    } while(!check(std::vector<TokenType> {COMMA, NEWLINE}));
+    while(check(SIMPLE_VALUES) || check(WHITESPACE)) {
+        valTokens.push_back(advance());
+    }
     if (valTokens.size() > 1) { // value concat, parse as string
         std::stringstream ss {""};
         while ((valTokens.end() - 1)->type == WHITESPACE) {
@@ -291,6 +306,7 @@ HKey * HParser::hoconKey() {
             keyTokens.push_back(advance());
         } else {
             error(peek().line, "Expected a simple value, got " + peek().lexeme);
+            consumeMember();
             return new HKey(ss.str(), keyTokens);
             // put error recovery later. maybe in HParser::error() and not here specifically.
         }   

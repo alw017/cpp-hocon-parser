@@ -205,7 +205,7 @@ void Lexer::scanToken() {
         case ' ':
         case '\r':
         case '\t': whitespace(); break;
-        case '\n': newline(); break; // newline
+        case '\n': line++; newline(); break; // newline
         case '/': 
             if (peek() == '/') {
                 advance(); // comment() assumes you start after the comment identifier

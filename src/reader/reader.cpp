@@ -72,9 +72,9 @@ void ConfigFile::runFile() {
         std::cerr << "Error occurred. Terminating program." << endl;
         exit(1);
     }
-    std::cout << "lexer finished." << std::endl;
+    //std::cout << "lexer finished." << std::endl;
     for (Token t : tokens) {
-        std::cout << t.str() << std::endl;
+        //std::cout << t.str() << std::endl;
     }
 
     HParser parser = HParser(tokens);

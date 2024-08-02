@@ -70,8 +70,9 @@ class HParser {
         bool match(std::vector<TokenType> types);
         void ignoreAllWhitespace();
         void ignoreInlineWhitespace();
-        void advanceToNextLine();
+        void consumeMember();
         void consumeToNextMember();
+        void consumeToNextRootMember();
 
         //create parsed objects :: Assignment
         HTree * rootTree();
