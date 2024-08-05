@@ -10,6 +10,7 @@ struct HKey;
 
 struct HTree {
     std::unordered_map<HKey *, std::variant<HTree*, HArray*, HSimpleValue*>> members;
+    std::vector<HKey*> memberOrder;
     HTree();
     ~HTree();
     void addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value);

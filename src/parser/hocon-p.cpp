@@ -9,7 +9,7 @@ template<class... Ts> Overload(Ts...) -> Overload<Ts...>;
 auto deleteHObj = Overload {                                     
     [](HTree * obj) { delete obj; },
     [](HArray * arr) { delete arr; },
-    [](HSimpleValue * val) {},
+    [](HSimpleValue * val) { delete val; },
 };
 
 auto stringify = Overload {                                     
@@ -24,20 +24,23 @@ HTree::HTree() : members(std::unordered_map<HKey *, std::variant<HTree*, HArray*
 HTree::~HTree() {
     for(auto pair : members) {
         std::visit(deleteHObj, pair.second);
+        delete pair.first;
     }
 }
 
 void HTree::addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
     members.insert(std::make_pair(key, value));
+    memberOrder.push_back(key);
 }
 
 std::string HTree::str() {
     const std::string INDENT = "    ";
     std::string out = "{\n";
-    for(auto pair : members) {
-        out += INDENT + pair.first->key + " : ";
-        if (std::holds_alternative<HTree*>(pair.second)) {
-            std::string string = std::get<HTree*>(pair.second)->str();
+    for(HKey* keyPointer : memberOrder) {
+        auto value = members[keyPointer];
+        out += INDENT + keyPointer->key + " : ";
+        if (std::holds_alternative<HTree*>(value)) {
+            std::string string = std::get<HTree*>(value)->str();
             std::stringstream ss(string);
             std::string word;
             std::getline(ss, word, '\n');
@@ -47,7 +50,7 @@ std::string HTree::str() {
                 out += INDENT + word + "\n"; 
             }
         } else {
-            out += std::visit(stringify, pair.second) + "\n";
+            out += std::visit(stringify, value) + "\n";
         }
     }
     out += "}";
