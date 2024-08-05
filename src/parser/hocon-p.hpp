@@ -6,14 +6,14 @@
 
 struct HArray;
 struct HSimpleValue;
-struct HKey;
+//struct HKey;
 
 struct HTree {
-    std::unordered_map<HKey *, std::variant<HTree*, HArray*, HSimpleValue*>> members;
-    std::vector<HKey*> memberOrder; 
+    std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>> members;
+    std::vector<std::string> memberOrder; 
     HTree();
     ~HTree();
-    void addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value);
+    void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value);
     std::string str();
 };
 
@@ -32,11 +32,11 @@ struct HSimpleValue {
     std::string str();
 };
 
-struct HKey {
-    std::string key;
-    std::vector<Token> tokens;
-    HKey(std::string k, std::vector<Token> t);
-};
+//struct HKey {
+//    std::string key;
+//    std::vector<Token> tokens;
+//    HKey(std::string k, std::vector<Token> t);
+//};
 
 struct HSubstitution {
     std::string path;
@@ -82,7 +82,7 @@ class HParser {
         HTree * hoconTree();
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
-        HKey * hoconKey();
+        std::string hoconKey();
 
         //object merge/concatenation
         HTree * mergeTrees(HTree * first, HTree * second);

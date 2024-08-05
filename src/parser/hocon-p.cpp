@@ -21,25 +21,31 @@ auto stringify = Overload {
 };
 
 
-HTree::HTree() : members(std::unordered_map<HKey *, std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
+HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
 HTree::~HTree() {
     for(auto pair : members) {
         std::visit(deleteHObj, pair.second);
-        delete pair.first;
     }
 }
 
-void HTree::addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
-    members.insert(std::make_pair(key, value));
-    memberOrder.push_back(key);
+void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
+    if(members.count(key) == 0) {
+        memberOrder.emplace_back(key);
+        members.insert(std::make_pair(key, value));
+    } else {
+        members[key] = value;
+    }
 }
 
 std::string HTree::str() {
+    if(members.empty()) {
+        return "{}";
+    }
     std::string out = "{\n";
-    for(HKey* keyPointer : memberOrder) {
-        auto value = members[keyPointer];
-        out += INDENT + keyPointer->key + " : ";
+    for(std::string keyval : memberOrder) {
+        auto value = members[keyval];
+        out += INDENT + keyval + " : ";
         if (std::holds_alternative<HTree*>(value)) {
             std::string string = std::get<HTree*>(value)->str();
             std::stringstream ss(string);
@@ -48,7 +54,7 @@ std::string HTree::str() {
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += INDENT + word + "\n"; 
+                out += word == "}" ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else if (std::holds_alternative<HArray*>(value)) {
             std::string string = std::get<HArray*>(value)->str();
@@ -58,7 +64,7 @@ std::string HTree::str() {
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += INDENT + word + "\n"; 
+                out += word == "]" ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else {
             out += std::visit(stringify, value) + "\n";
@@ -76,7 +82,10 @@ HArray::~HArray() {
     }
 }
 
-std::string HArray::str() { // tbt
+std::string HArray::str() { // tested,
+    if(elements.empty()) {
+        return "[]";
+    }
     std::string out = "[\n";
     for(auto e : elements) {
         out += INDENT;
@@ -88,7 +97,7 @@ std::string HArray::str() { // tbt
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += INDENT + word + "\n"; 
+                out += word == "}" ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else if (std::holds_alternative<HArray*>(e)) {
             std::string string = std::get<HArray*>(e)->str();
@@ -98,7 +107,7 @@ std::string HArray::str() { // tbt
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += INDENT + word + "\n"; 
+                out += word == "]" ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else {
             out += std::visit(stringify, e) + ",\n";
@@ -121,8 +130,6 @@ std::string HSimpleValue::str() {
     }
     return output;
 }
-
-HKey::HKey(std::string k, std::vector<Token> t) : key(k), tokens(t) {}
 
 HSubstitution::HSubstitution(std::string s) : path(s) {}
 
@@ -284,11 +291,12 @@ void HParser::consumeToNextElement() {
 /*
     Attempts to create a hocon object with the following tokens, consuming all tokens including the ending '}'.
     Assumes you are within the object, after the first {
+    This is only used if a root hocon object is not wrapped in braces.
 */
 HTree * HParser::rootTree() { 
     HTree * output = new HTree();
     while(!atEnd()) { // loop through members
-        HKey * key = hoconKey(); 
+        std::string key = hoconKey(); 
         if (match(LEFT_BRACE)) {
             HTree * curr = hoconTree(); // ends after consuming right brace.
             while (match(LEFT_BRACE)) {
@@ -309,7 +317,7 @@ HTree * HParser::rootTree() {
             }
             consumeToNextRootMember();
         } else {
-            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
+            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key + "'");
             consumeToNextRootMember();
         }
     }
@@ -327,7 +335,7 @@ HTree * HParser::hoconTree() {
             error(peek().line, "Imbalanced {}");
             break;
         }
-        HKey * key = hoconKey(); 
+        std::string key = hoconKey(); 
         if (match(LEFT_BRACE)) {
             HTree * curr = hoconTree(); // ends after consuming right brace.
             while (match(LEFT_BRACE)) {
@@ -348,7 +356,7 @@ HTree * HParser::hoconTree() {
             }
             consumeToNextMember();
         } else {
-            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key->key + "'");
+            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key + "'");
             consumeMember();
         }
     }
@@ -376,6 +384,7 @@ HArray * HParser::hoconArray() {
             // need to add object concatentation here.
         } else if (match(LEFT_BRACKET)) { // array case
             HArray * curr = hoconArray();
+            output->addElement(curr);
             consumeToNextElement();
             // add array concatenation here;
         } else if (check(SIMPLE_VALUES)) { // simple value case
@@ -421,7 +430,7 @@ HSimpleValue * HParser::hoconSimpleValue() {
     Substitutions are not supported in keys. Any Simple value is allowed in a key. The whitespace between simple values is preserved.
     Assumes you have consumed up to a whitespace before the first token of the key.
 */
-HKey * HParser::hoconKey() {
+std::string HParser::hoconKey() {
     ignoreAllWhitespace();
     std::vector<Token> keyTokens = std::vector<Token>();
     std::stringstream ss {""};
@@ -438,15 +447,15 @@ HKey * HParser::hoconKey() {
         }
     } else {
         error(peek().line, "Expected a value, got nothing");
-        return new HKey("", keyTokens);
+        return "";
     }
 
-    return new HKey(ss.str(), keyTokens);
+    return ss.str();
 }
 
 // object merge
 
-// concatenation
+// array concatenation
 
 
 
@@ -455,7 +464,7 @@ HKey * HParser::hoconKey() {
 void HParser::parseTokens() {
     if (match(LEFT_BRACKET)) { // root array
         ignoreAllWhitespace();
-        //rootObject = hoconArray();
+        rootObject = hoconArray();
         ignoreAllWhitespace();
     } else { // if not array, implicitly assumed to be object.
         rootBrace = match(LEFT_BRACE);

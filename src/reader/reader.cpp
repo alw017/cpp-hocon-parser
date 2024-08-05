@@ -89,9 +89,12 @@ void ConfigFile::runFile() {
     if(std::holds_alternative<HTree*>(parser.rootObject)) {
         HTree* p = std::get<HTree*>(parser.rootObject);
         for (auto pair : p->members) {
-            std::cout << pair.first->key << std::endl;
+            std::cout << pair.first << std::endl;
         }
         std::cout << "Root Object String: \n" << p->str() << std::endl;
+    } else if (std::holds_alternative<HArray*>(parser.rootObject)) {
+        HArray * p = std::get<HArray*>(parser.rootObject);
+        std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
     
     /*

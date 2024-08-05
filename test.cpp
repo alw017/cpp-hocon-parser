@@ -24,8 +24,8 @@ void test_parser_hoconKey() {
     Lexer lexer = Lexer("test string 1 :", tokens);
     lexer.run();
     HParser parser = HParser(tokens);
-    HKey * k = parser.hoconKey();
-    bool succeed = ASSERT_STRING(k->key, "test string 1");
+    std::string k = parser.hoconKey();
+    bool succeed = ASSERT_STRING(k, "test string 1");
     if (succeed) {
         std::cout << "hoconKey() succeeded" << std::endl;
     } else {

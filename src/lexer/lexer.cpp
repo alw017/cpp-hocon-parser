@@ -270,10 +270,10 @@ void Lexer::pruneInlineWhitespace() { // prunes all whitespace excluding newline
 void Lexer::pruneAllWhitespace() { // prunes all whitespace, including newline.
     //std::cout << "trying to prune: '" << peek() << "'" << std::endl;
     while (isWhitespace(peek()) && !atEnd()) {
-        advance(); // pruning some whitespace that will always be ignored.
         if (peek() == '\n') {
             line++;
         }
+        advance(); // pruning some whitespace that will always be ignored.
     }
     //std::cout << std::endl;
 }
