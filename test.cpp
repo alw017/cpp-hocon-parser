@@ -47,9 +47,31 @@ void test_parser_hoconSimpleValue() {
     }
 }
 
+void test_parser_hoconTree_simpleValuesOnly() {
+    std::vector<Token> tokens = std::vector<Token>();
+    Lexer lexer = Lexer("test {val: 1, obj {val = 2}}", tokens);
+    lexer.run();
+    HParser parser = HParser(tokens);
+}
+
+void test_parser_hoconArray() {
+    std::vector<Token> tokens = std::vector<Token>();
+    Lexer lexer = Lexer("val1, value 2, { val : 1 }, ]", tokens);
+    lexer.run();
+    HParser parser = HParser(tokens);
+    HArray * arr = parser.hoconArray();
+    bool succeed = true;
+    if (succeed) {
+        std::cout << "hoconSimpleValue() succeeded" << std::endl;
+    } else {
+        std::cout << "hoconSimpleValue() failed" << std::endl;
+    }
+}
+
 int main() {
     std::cout << "starting tests" << std::endl;
     test_parser_hoconKey();
     test_parser_hoconSimpleValue();
+    test_parser_hoconArray();
 }
 

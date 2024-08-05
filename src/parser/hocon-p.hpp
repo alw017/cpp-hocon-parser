@@ -10,7 +10,7 @@ struct HKey;
 
 struct HTree {
     std::unordered_map<HKey *, std::variant<HTree*, HArray*, HSimpleValue*>> members;
-    std::vector<HKey*> memberOrder;
+    std::vector<HKey*> memberOrder; 
     HTree();
     ~HTree();
     void addMember(HKey * key, std::variant<HTree*, HArray*, HSimpleValue*> value);
@@ -72,8 +72,10 @@ class HParser {
         void ignoreAllWhitespace();
         void ignoreInlineWhitespace();
         void consumeMember();
+        void consumeElement();
         void consumeToNextMember();
         void consumeToNextRootMember();
+        void consumeToNextElement();
 
         //create parsed objects :: Assignment
         HTree * rootTree();
@@ -87,7 +89,8 @@ class HParser {
 
         //concatenation
         HArray * concatArrays(HArray * first, HArray * second);
-        HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
+        //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
+        // ^ is automatically performed in hoconSimpleValue();
 
         //parsing steps:
         void parseTokens(); // first pass, creating AST and merging whenever possible.

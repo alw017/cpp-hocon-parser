@@ -73,14 +73,16 @@ void ConfigFile::runFile() {
         exit(1);
     }
     //std::cout << "lexer finished." << std::endl;
-    for (Token t : tokens) {
-        //std::cout << t.str() << std::endl;
-    }
+    
 
     HParser parser = HParser(tokens);
     parser.parseTokens();
     if (!parser.validConf) {
-        std::cout << "Invalid Configuration, Aborted" << std::endl;
+        std::cout << "Invalid Configu ration, Aborted" << std::endl;
+        std::cout << "Dumping tokens..." << std::endl;
+        for (Token t : tokens) {
+            std::cout << t.str() << std::endl;
+        }
         return;
     }
 
