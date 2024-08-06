@@ -195,13 +195,13 @@ char Lexer::peekNext() {
 void Lexer::scanToken() {
     char c = advance();
     switch(c) {
-        case '{': addToken(LEFT_BRACE); pruneAllWhitespace(); break;
+        case '{': addToken(LEFT_BRACE); pruneWsAndComments(); break;
         case '}': addToken(RIGHT_BRACE); pruneInlineWhitespace(); break;
-        case '[': addToken(LEFT_BRACKET); pruneAllWhitespace(); break;
+        case '[': addToken(LEFT_BRACKET); pruneWsAndComments(); break;
         case ']': addToken(RIGHT_BRACKET); pruneInlineWhitespace(); break;
-        case ',': addToken(COMMA); pruneAllWhitespace(); break;
-        case ':': addToken(COLON); pruneAllWhitespace(); break;
-        case '=': addToken(EQUAL); pruneAllWhitespace(); break;
+        case ',': addToken(COMMA); pruneWsAndComments(); break;
+        case ':': addToken(COLON); pruneWsAndComments(); break;
+        case '=': addToken(EQUAL); pruneWsAndComments(); break;
         case ' ':
         case '\r':
         case '\t': whitespace(); break;

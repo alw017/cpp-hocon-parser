@@ -91,6 +91,10 @@ class HParser {
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
         std::string hoconKey();
+
+        //helper methods for creating parsed objects
+        HArray * concatAdjacentArrays();
+        HTree * mergeAdjacentTrees();
         
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
         // ^ is automatically performed in hoconSimpleValue();

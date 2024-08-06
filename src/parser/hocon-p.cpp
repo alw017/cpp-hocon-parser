@@ -356,20 +356,15 @@ HTree * HParser::rootTree() {
     while(!atEnd()) { // loop through members
         std::string key = hoconKey(); 
         if (match(LEFT_BRACE)) {
-            HTree * curr = hoconTree(); // ends after consuming right brace.
-            while (match(LEFT_BRACE)) {
-                //curr = mergeTrees(curr, hoconTree());
-                hoconTree();
-            }
-            output->addMember(key, curr); // implied separator case. ex: foo {}
+            output->addMember(key, mergeAdjacentTrees()); // implied separator case. ex: foo {}
             consumeToNextRootMember();
             // need to add object concatentation here.
         } else if(match(KEY_VALUE_SEP)) {
             ignoreAllWhitespace();
             if (match(LEFT_BRACE)) {
-                output->addMember(key, hoconTree());
+                output->addMember(key, mergeAdjacentTrees());
             } else if (match(LEFT_BRACKET)) {
-                output->addMember(key, hoconArray());
+                output->addMember(key, concatAdjacentArrays());
             } else {   
                 output->addMember(key, hoconSimpleValue());
             }
@@ -394,21 +389,15 @@ HTree * HParser::hoconTree() {
             break;
         }
         std::string key = hoconKey(); 
-        if (match(LEFT_BRACE)) {
-            HTree * curr = hoconTree(); // ends after consuming right brace.
-            while (match(LEFT_BRACE)) {
-                //curr = mergeTrees(curr, hoconTree());
-                hoconTree();
-            }
-            output->addMember(key, curr); // implied separator case. ex: foo {}
+        if (match(LEFT_BRACE)) {            // implied separator case. ex: foo {}
+            output->addMember(key, mergeAdjacentTrees());   // object concatentation here.
             consumeToNextMember();
-            // need to add object concatentation here.
-        } else if(match(KEY_VALUE_SEP)) {
+        } else if(match(KEY_VALUE_SEP)) {   // explicit separator ex: foo = {}
             ignoreAllWhitespace();
             if (match(LEFT_BRACE)) {
-                output->addMember(key, hoconTree());
+                output->addMember(key, mergeAdjacentTrees());
             } else if (match(LEFT_BRACKET)) {
-                output->addMember(key, hoconArray());
+                output->addMember(key, concatAdjacentArrays());
             } else {   
                 output->addMember(key, hoconSimpleValue());
             }
@@ -422,7 +411,7 @@ HTree * HParser::hoconTree() {
 }
 
 /* 
-    assume you have just consumed the left bracket.
+    assume you have just consumed the left bracket. consumes the right bracket token.
 */
 HArray * HParser::hoconArray() {
     HArray * output = new HArray();
@@ -432,24 +421,16 @@ HArray * HParser::hoconArray() {
             break;
         }
         if (match(LEFT_BRACE)) { // object case
-            HTree * curr = hoconTree(); // ends after consuming right brace.
-            while (match(LEFT_BRACE)) {
-                //curr = mergeTrees(curr, hoconTree());
-                hoconTree();
-            }
-            output->addElement(curr); // implied separator case. ex: foo {}
+            output->addElement(mergeAdjacentTrees()); // implied separator case. ex: foo {}
             consumeToNextElement(); 
-            // need to add object concatentation here.
         } else if (match(LEFT_BRACKET)) { // array case
-            HArray * curr = hoconArray();
-            output->addElement(curr);
+            output->addElement(concatAdjacentArrays());
             consumeToNextElement();
-            // add array concatenation here;
         } else if (check(SIMPLE_VALUES)) { // simple value case
             output->addElement(hoconSimpleValue());
             consumeToNextElement();
         } else {
-            error(peek().line, "Expected '=' or ':', got '" + peek().lexeme + "', instead");
+            error(peek().line, "Expected a {, [ or a simple value, got " + peek().lexeme + "', instead");
             consumeMember();
         }
     }
@@ -511,12 +492,22 @@ std::string HParser::hoconKey() {
     return ss.str();
 }
 
-// object merge
+// helper methods for creating parsed objects
+HArray * HParser::concatAdjacentArrays() {
+    HArray * curr = hoconArray();
+    while (match(LEFT_BRACKET)) { // array concatenation here;
+        curr->concatArrays(hoconArray());
+    }
+    return curr;
+}
 
-
-
-// array concatenation
-
+HTree * HParser::mergeAdjacentTrees() {
+    HTree * curr = hoconTree(); // ends after consuming right brace.
+    while (match(LEFT_BRACE)) { // obj concatenation here
+        curr->mergeTrees(hoconTree());
+    }
+    return curr;
+}
 
 
 // parsing steps:
