@@ -20,6 +20,11 @@ auto stringify = Overload {
     [](HSimpleValue * val) { return val->str(); },
 };
 
+auto getDeepCopy = Overload {
+    [](HTree * obj) { std::variant<HTree*, HArray *, HSimpleValue *> out = obj->deepCopy(); return out; },
+    [](HArray * arr) { std::variant<HTree*, HArray *, HSimpleValue *> out = arr->deepCopy(); return out; },
+    [](HSimpleValue * val) { std::variant<HTree*, HArray *, HSimpleValue *> out = val->deepCopy(); return out; },
+};
 
 HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
@@ -30,12 +35,42 @@ HTree::~HTree() {
 }
 
 void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
-    if(members.count(key) == 0) {
-        memberOrder.emplace_back(key);
+    if(members.count(key) == 0) { // new key case
+        memberOrder.push_back(key);
         members.insert(std::make_pair(key, value));
-    } else {
+    } else if (std::holds_alternative<HTree*>(members[key]) && std::holds_alternative<HTree*>(value)) { // object merge case
+        std::get<HTree*>(members[key])->mergeTrees(std::get<HTree*>(value));
+    } else { // duplicate key, override case
+        std::visit(deleteHObj, members[key]);
         members[key] = value;
     }
+}
+
+HTree * HTree::deepCopy() {
+    HTree * copy = new HTree();
+    for (auto pair : members) {
+        copy->addMember(pair.first, std::visit(getDeepCopy, pair.second));
+    }
+    return copy;
+} 
+
+/* 
+    Merge method for trees. second parameter members take precedence (overwrite) the first.
+    deletes the pointer after being done. this may need to be changed later. 
+*/
+void HTree::mergeTrees(HTree * second) {
+    for(auto pair : second->members) {
+        if (members.count(pair.first) == 0) { // not exist case;
+            members[pair.first] = std::visit(getDeepCopy, pair.second);
+            memberOrder.push_back(pair.first);
+        } else if (std::holds_alternative<HTree*>(members[pair.first]) && std::holds_alternative<HTree*>(pair.second)) { // exists, both objects
+            std::get<HTree*>(members[pair.first])->mergeTrees(std::get<HTree*>(pair.second));
+        } else { // exists not both objects
+            std::visit(deleteHObj, members[pair.first]);
+            members[pair.first] = std::visit(getDeepCopy, pair.second);
+        }
+    }
+    delete second;
 }
 
 std::string HTree::str() {
@@ -82,6 +117,14 @@ HArray::~HArray() {
     }
 }
 
+HArray * HArray::deepCopy() {
+    HArray * copy = new HArray();
+    for(auto e : elements) {
+        copy->addElement(std::visit(getDeepCopy, e));
+    }
+    return copy;
+}
+
 std::string HArray::str() { // tested,
     if(elements.empty()) {
         return "[]";
@@ -121,6 +164,17 @@ void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
     elements.push_back(val);
 }
 
+/*
+    concatenate two arrays, appending elements of second onto the first, preserving original order.
+    deletes second after finishing.
+*/
+void HArray::concatArrays(HArray * second) {
+    for(auto e : second->elements) {
+        addElement(std::visit(getDeepCopy, e));
+    }
+    delete second;
+}
+
 HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts): svalue(s), tokenParts(tokenParts) {}
 
 std::string HSimpleValue::str() {
@@ -129,6 +183,10 @@ std::string HSimpleValue::str() {
         output += t.lexeme;
     }
     return output;
+}
+
+HSimpleValue* HSimpleValue::deepCopy() {
+    return new HSimpleValue(svalue, tokenParts);
 }
 
 HSubstitution::HSubstitution(std::string s) : path(s) {}
@@ -454,6 +512,8 @@ std::string HParser::hoconKey() {
 }
 
 // object merge
+
+
 
 // array concatenation
 

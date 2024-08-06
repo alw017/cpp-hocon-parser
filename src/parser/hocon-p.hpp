@@ -14,7 +14,11 @@ struct HTree {
     HTree();
     ~HTree();
     void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value);
+    HTree * deepCopy();
     std::string str();
+
+    //object merge/concatenation
+    void mergeTrees(HTree * second);
 };
 
 struct HArray {
@@ -22,7 +26,10 @@ struct HArray {
     HArray();
     ~HArray();
     void addElement(std::variant<HTree*, HArray*, HSimpleValue*> val);
+    HArray * deepCopy();
     std::string str();
+    //concatenation
+    void concatArrays(HArray * second);
 };
 
 struct HSimpleValue {
@@ -30,6 +37,7 @@ struct HSimpleValue {
     std::vector<Token> tokenParts;
     HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts);
     std::string str();
+    HSimpleValue * deepCopy();
 };
 
 //struct HKey {
@@ -83,12 +91,7 @@ class HParser {
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
         std::string hoconKey();
-
-        //object merge/concatenation
-        HTree * mergeTrees(HTree * first, HTree * second);
-
-        //concatenation
-        HArray * concatArrays(HArray * first, HArray * second);
+        
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
         // ^ is automatically performed in hoconSimpleValue();
 
