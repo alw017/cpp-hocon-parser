@@ -14,6 +14,7 @@ struct HTree {
     HTree();
     ~HTree();
     void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value);
+    bool memberExists(std::string key);
     HTree * deepCopy();
     std::string str();
 
@@ -90,9 +91,12 @@ class HParser {
         HTree * hoconTree();
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
-        std::string hoconKey();
+        //std::vector<std::string> hoconKey();
+        std::vector<std::string> hoconKey();
 
         //helper methods for creating parsed objects
+        HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
+        static std::vector<std::string> splitPath(std::vector<Token> keyTokens);
         HArray * concatAdjacentArrays();
         HTree * mergeAdjacentTrees();
         

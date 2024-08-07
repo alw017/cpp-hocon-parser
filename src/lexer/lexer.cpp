@@ -167,7 +167,7 @@ void Lexer::number() {
         while (isDigit(peek())) advance();
         isDouble = true;
     }
-    if ((peek() == 'e' || peek() == 'E') && (isDigit(peekNext()) || peekNext() == '+' || peekNext() == '-')) {
+    if ((peek() == 'e' || peek() == 'E') && (isDigit(peekNext()) || (peekNext() == '+' || peekNext() == '-') && isDigit(peekNextNext()))) {
         advance(); // take e/E and +/- or digit.
         advance();
         while(isDigit(peek())) advance();
@@ -190,6 +190,11 @@ void Lexer::whitespace() {
 char Lexer::peekNext() {
     if (current + 1 >= length) return '\0';
     return source[current + 1];
+}
+
+char Lexer::peekNextNext() {
+    if (current +2 >= length) return '\0';
+    return source[current + 2];
 }
 
 void Lexer::scanToken() {
@@ -223,7 +228,7 @@ void Lexer::scanToken() {
                 addToken(PLUS_EQUAL);
             } else {
                 std::string s(1, peek());
-                error(line, "Expected =, got " + s);
+                error(line, "Expected = after parsing +, got '" + s + "'");
             } break;
         case '$': 
             if (peek() == '{') {

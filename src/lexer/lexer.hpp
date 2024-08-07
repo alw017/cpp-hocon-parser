@@ -32,6 +32,7 @@ class Lexer {
         void addToken(TokenType type, bool b);
         char peek();
         char peekNext();
+        char peekNextNext();
         void quotedString();
         void unquotedString(char c);
         void number();

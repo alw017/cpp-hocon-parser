@@ -69,7 +69,7 @@ void ConfigFile::runFile() {
     std::vector<Token> tokens = vector<Token>();
     Lexer lexer = Lexer(file, tokens);
     if (!lexer.run()) {
-        std::cerr << "Error occurred. Terminating program." << endl;
+        std::cerr << "Lexer Error occurred. Terminating program." << endl;
         exit(1);
     }
     //std::cout << "lexer finished." << std::endl;
@@ -85,11 +85,14 @@ void ConfigFile::runFile() {
         }
         return;
     }
-
+    for (Token t : tokens) {
+        std::cout << t.str() << std::endl;
+    }
     if(std::holds_alternative<HTree*>(parser.rootObject)) {
         HTree* p = std::get<HTree*>(parser.rootObject);
         for (auto pair : p->members) {
             std::cout << pair.first << std::endl;
+            //std::cout << std::get<HSimpleValue*> (pair.second)->svalue.index() << std::endl;
         }
         std::cout << "Root Object String: \n" << p->str() << std::endl;
     } else if (std::holds_alternative<HArray*>(parser.rootObject)) {

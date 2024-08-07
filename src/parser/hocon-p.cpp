@@ -46,6 +46,10 @@ void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
     }
 }
 
+bool HTree::memberExists(std::string key) {
+    return members.count(key) != 0;
+}
+
 HTree * HTree::deepCopy() {
     HTree * copy = new HTree();
     for (auto pair : members) {
@@ -353,24 +357,31 @@ void HParser::consumeToNextElement() {
 */
 HTree * HParser::rootTree() { 
     HTree * output = new HTree();
+    HTree * target = output;
     while(!atEnd()) { // loop through members
-        std::string key = hoconKey(); 
+        std::vector<std::string> path = hoconKey(); 
+        std::string keyValue = path[path.size()-1];
+        if (path.size() > 1) {
+            target = findOrCreatePath(path, output);
+        } else {
+            target = output;
+        }
         if (match(LEFT_BRACE)) {
-            output->addMember(key, mergeAdjacentTrees()); // implied separator case. ex: foo {}
+            target->addMember(keyValue, mergeAdjacentTrees()); // implied separator case. ex: foo {}
             consumeToNextRootMember();
             // need to add object concatentation here.
         } else if(match(KEY_VALUE_SEP)) {
             ignoreAllWhitespace();
             if (match(LEFT_BRACE)) {
-                output->addMember(key, mergeAdjacentTrees());
+                target->addMember(keyValue, mergeAdjacentTrees());
             } else if (match(LEFT_BRACKET)) {
-                output->addMember(key, concatAdjacentArrays());
+                target->addMember(keyValue, concatAdjacentArrays());
             } else {   
-                output->addMember(key, hoconSimpleValue());
+                target->addMember(keyValue, hoconSimpleValue());
             }
             consumeToNextRootMember();
         } else {
-            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key + "'");
+            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + keyValue + "'");
             consumeToNextRootMember();
         }
     }
@@ -383,27 +394,34 @@ HTree * HParser::rootTree() {
 */
 HTree * HParser::hoconTree() { 
     HTree * output = new HTree();
+    HTree * target = output;
     while(!match(RIGHT_BRACE)) { // loop through members
         if(atEnd()) {
             error(peek().line, "Imbalanced {}");
             break;
         }
-        std::string key = hoconKey(); 
+        std::vector<std::string> path = hoconKey(); 
+        std::string keyValue = path[path.size()-1];
+        if (path.size() > 1) {
+            target = findOrCreatePath(path, output);
+        } else {
+            target = output;
+        }
         if (match(LEFT_BRACE)) {            // implied separator case. ex: foo {}
-            output->addMember(key, mergeAdjacentTrees());   // object concatentation here.
+            target->addMember(keyValue, mergeAdjacentTrees());   // object concatentation here.
             consumeToNextMember();
         } else if(match(KEY_VALUE_SEP)) {   // explicit separator ex: foo = {}
             ignoreAllWhitespace();
             if (match(LEFT_BRACE)) {
-                output->addMember(key, mergeAdjacentTrees());
+                target->addMember(keyValue, mergeAdjacentTrees());
             } else if (match(LEFT_BRACKET)) {
-                output->addMember(key, concatAdjacentArrays());
+                target->addMember(keyValue, concatAdjacentArrays());
             } else {   
-                output->addMember(key, hoconSimpleValue());
+                target->addMember(keyValue, hoconSimpleValue());
             }
             consumeToNextMember();
         } else {
-            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + key + "'");
+            error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + keyValue + "'");
             consumeMember();
         }
     }
@@ -469,7 +487,7 @@ HSimpleValue * HParser::hoconSimpleValue() {
     Substitutions are not supported in keys. Any Simple value is allowed in a key. The whitespace between simple values is preserved.
     Assumes you have consumed up to a whitespace before the first token of the key.
 */
-std::string HParser::hoconKey() {
+std::vector<std::string> HParser::hoconKey() {
     ignoreAllWhitespace();
     std::vector<Token> keyTokens = std::vector<Token>();
     std::stringstream ss {""};
@@ -486,13 +504,75 @@ std::string HParser::hoconKey() {
         }
     } else {
         error(peek().line, "Expected a value, got nothing");
-        return "";
+        return std::vector<std::string>();
     }
-
-    return ss.str();
+    //return ss.str();
+    return splitPath(keyTokens);
 }
 
 // helper methods for creating parsed objects
+
+/*
+    given a path via a vector of string keys, create a series of nested objects to which maps to the path, if it doesn't exist.
+*/
+HTree * HParser::findOrCreatePath(std::vector<std::string> path, HTree * parent) {
+    bool pathExists = true;
+    HTree * current = parent;
+    for(auto iter = path.begin(); iter != path.end()-1; iter++) {
+        if (pathExists) {
+            if(current->memberExists(*iter) && std::holds_alternative<HTree*>(current->members[*iter])) { // obj corresponds to key. traverse to next obj.
+                current = std::get<HTree*>(current->members[*iter]);
+            } else { // non obj corresponds to key, or key doesn't exist. create/override key to be a new blank obj.
+                pathExists = false;
+                current->addMember(*iter, new HTree());
+                current = std::get<HTree*>(current->members[*iter]);
+            }
+        } else { // loop found a non-existent key in the past, no need to double check when there will never be a key.
+            current->addMember(*iter, new HTree());
+            current = std::get<HTree*>(current->members[*iter]);
+        }
+    }
+    return current;
+}
+
+/*
+    Takes a vector of tokens containing a key, and splits it into strings for each path section.
+*/
+std::vector<std::string> HParser::splitPath(std::vector<Token> keyTokens) { 
+    std::vector<std::string> path;
+    std::string part = "";
+    for (auto token : keyTokens) {
+        size_t start = 0;
+        size_t curr = 0;    
+        switch (token.type) {
+            case NUMBER:
+            case TRUE:
+            case FALSE:
+            case NULLVALUE:
+            case WHITESPACE:
+            case UNQUOTED_STRING:
+                start = 0; 
+                curr = 0; 
+                while ((curr = token.lexeme.find(".", start)) != std::string::npos) {   
+                    part += token.lexeme.substr(start, curr-start);  
+                    path.push_back(part);
+                    part = ""; 
+                    start = curr + 1; 
+                } 
+                part += token.lexeme.substr(start);
+                break;
+            case QUOTED_STRING:
+                part += std::get<std::string>(token.literal);
+                break;
+            default:
+                break;
+        }
+    }
+    path.push_back(part);
+    return path;
+}
+
+
 HArray * HParser::concatAdjacentArrays() {
     HArray * curr = hoconArray();
     while (match(LEFT_BRACKET)) { // array concatenation here;
@@ -534,6 +614,11 @@ void HParser::parseTokens() {
 }
 
 // void resolveSubstitutions() {}
+
+std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
+
+// split string by delimiter helper. 
+
 
 // access methods:
 
