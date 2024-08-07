@@ -2,6 +2,8 @@
 
 const std::string INDENT = "    "; 
 
+bool debug = false;
+
 template<typename ... Ts>                                                 
 struct Overload : Ts ... { 
     using Ts::operator() ...;
@@ -26,6 +28,18 @@ auto getDeepCopy = Overload {
     [](HSimpleValue * val) { std::variant<HTree*, HArray *, HSimpleValue *> out = val->deepCopy(); return out; },
 };
 
+auto getPath = Overload {
+    [](HTree * obj) { return obj->getPath(); },
+    [](HArray * arr) { return arr->getPath(); },
+    [](HSimpleValue * val) { return val->getPath(); },
+};
+
+auto getKey = Overload {
+    [](HTree * obj) { return obj->key==""?"root":obj->key; },
+    [](HArray * arr) { return arr->key==""?"root":arr->key; },
+    [](HSimpleValue * val) { return val->key; }
+};
+
 HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
 HTree::~HTree() {
@@ -35,13 +49,31 @@ HTree::~HTree() {
 }
 
 void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
+    if(std::holds_alternative<HTree*>(value)) {
+        HTree * obj = std::get<HTree*>(value);
+        obj->parent = this;
+        obj->key = key;
+        obj->root = false;
+    } else if (std::holds_alternative<HArray*>(value)) {
+        HArray * arr = std::get<HArray*>(value);
+        arr->parent = this;
+        arr->key = key;
+        arr->root = false;
+    } else {
+        HSimpleValue * val = std::get<HSimpleValue*>(value);
+        val->parent = this;
+        val->key = key;
+    }
     if(members.count(key) == 0) { // new key case
+        //std::cout << "added key " << key << " with value " << std::visit(stringify, value) << std::endl;
         memberOrder.push_back(key);
         members.insert(std::make_pair(key, value));
     } else if (std::holds_alternative<HTree*>(members[key]) && std::holds_alternative<HTree*>(value)) { // object merge case
         std::get<HTree*>(members[key])->mergeTrees(std::get<HTree*>(value));
+        //std::cout << "merged object key " << key << " with object " << std::visit(stringify, value) << std::endl;
     } else { // duplicate key, override case
         std::visit(deleteHObj, members[key]);
+        //std::cout << "overrided key " << key << " with value " << std::visit(stringify, value) << std::endl;
         members[key] = value;
     }
 }
@@ -65,13 +97,12 @@ HTree * HTree::deepCopy() {
 void HTree::mergeTrees(HTree * second) {
     for(auto pair : second->members) {
         if (members.count(pair.first) == 0) { // not exist case;
-            members[pair.first] = std::visit(getDeepCopy, pair.second);
-            memberOrder.push_back(pair.first);
+            addMember(pair.first, std::visit(getDeepCopy, pair.second));
         } else if (std::holds_alternative<HTree*>(members[pair.first]) && std::holds_alternative<HTree*>(pair.second)) { // exists, both objects
             std::get<HTree*>(members[pair.first])->mergeTrees(std::get<HTree*>(pair.second));
-        } else { // exists not both objects
-            std::visit(deleteHObj, members[pair.first]);
-            members[pair.first] = std::visit(getDeepCopy, pair.second);
+        } else { // exists but not both objects
+            //std::visit(deleteHObj, members[pair.first]);
+            addMember(pair.first, std::visit(getDeepCopy, pair.second));
         }
     }
     delete second;
@@ -82,6 +113,14 @@ std::string HTree::str() {
         return "{}";
     }
     std::string out = "{\n";
+    if (debug) {
+        if(!root) {
+            out = "{ ... parent key = " + std::visit(getKey, parent) + "\n";
+        } else {
+            out = "{ ... root obj \n";
+        }
+    }
+    
     for(std::string keyval : memberOrder) {
         auto value = members[keyval];
         out += INDENT + keyval + " : ";
@@ -113,6 +152,11 @@ std::string HTree::str() {
     return out;
 }
 
+// TODO
+std::string HTree::getPath() {
+    return "";
+}
+
 HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
 
 HArray::~HArray() {
@@ -133,7 +177,15 @@ std::string HArray::str() { // tested,
     if(elements.empty()) {
         return "[]";
     }
-    std::string out = "[\n";
+    std::string out = "[ \n";
+    if (debug) {
+        if (!root) {
+            out = "[ ... parent key = " + std::visit(getKey, parent) + "\n";
+        } else {
+            out = "[ ... root array\n";
+        }
+    }
+
     for(auto e : elements) {
         out += INDENT;
         if (std::holds_alternative<HTree*>(e)) {
@@ -165,6 +217,21 @@ std::string HArray::str() { // tested,
 }
 
 void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
+    if(std::holds_alternative<HTree*>(val)) {
+        HTree * obj = std::get<HTree*>(val);
+        obj->parent = this;
+        obj->key = "array element";
+        obj->root = false;
+    } else if (std::holds_alternative<HArray*>(val)) {
+        HArray * arr = std::get<HArray*>(val);
+        arr->parent = this;
+        arr->key = "array element";
+        arr->root = false;
+    } else {
+        HSimpleValue * value = std::get<HSimpleValue*>(val);
+        value->parent = this;
+        value->key = "array element";
+    }
     elements.push_back(val);
 }
 
@@ -193,7 +260,7 @@ HSimpleValue* HSimpleValue::deepCopy() {
     return new HSimpleValue(svalue, tokenParts);
 }
 
-HSubstitution::HSubstitution(std::string s) : path(s) {}
+HSubstitution::HSubstitution(std::vector<std::string> s) : path(s) {}
 
 HParser::~HParser() {
     std::visit(deleteHObj, rootObject);
@@ -366,8 +433,8 @@ HTree * HParser::rootTree() {
         } else {
             target = output;
         }
-        if (match(LEFT_BRACE)) {
-            target->addMember(keyValue, mergeAdjacentTrees()); // implied separator case. ex: foo {}
+        if (match(LEFT_BRACE)) { // implied separator case. ex: foo {}
+            target->addMember(keyValue, mergeAdjacentTrees()); 
             consumeToNextRootMember();
             // need to add object concatentation here.
         } else if(match(KEY_VALUE_SEP)) {
@@ -514,6 +581,8 @@ std::vector<std::string> HParser::hoconKey() {
 
 /*
     given a path via a vector of string keys, create a series of nested objects to which maps to the path, if it doesn't exist.
+    @return HTree * 
+    @returns a pointer to the inmost object
 */
 HTree * HParser::findOrCreatePath(std::vector<std::string> path, HTree * parent) {
     bool pathExists = true;
@@ -524,12 +593,14 @@ HTree * HParser::findOrCreatePath(std::vector<std::string> path, HTree * parent)
                 current = std::get<HTree*>(current->members[*iter]);
             } else { // non obj corresponds to key, or key doesn't exist. create/override key to be a new blank obj.
                 pathExists = false;
-                current->addMember(*iter, new HTree());
-                current = std::get<HTree*>(current->members[*iter]);
+                HTree * obj = new HTree();
+                current->addMember(*iter, obj);
+                current = obj;
             }
         } else { // loop found a non-existent key in the past, no need to double check when there will never be a key.
-            current->addMember(*iter, new HTree());
-            current = std::get<HTree*>(current->members[*iter]);
+            HTree * obj = new HTree();
+            current->addMember(*iter, obj);
+            current = obj;
         }
     }
     return current;

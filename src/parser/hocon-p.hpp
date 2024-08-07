@@ -11,12 +11,17 @@ struct HSimpleValue;
 struct HTree {
     std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>> members;
     std::vector<std::string> memberOrder; 
+    bool root = true;
+    std::variant<HTree *, HArray *> parent;
+    std::string key = "";
     HTree();
+    //HTree(std::variant<HTree *, HArray *> parent);
     ~HTree();
     void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value);
     bool memberExists(std::string key);
     HTree * deepCopy();
     std::string str();
+    std::string getPath();
 
     //object merge/concatenation
     void mergeTrees(HTree * second);
@@ -24,20 +29,29 @@ struct HTree {
 
 struct HArray {
     std::vector<std::variant<HTree*, HArray*, HSimpleValue*>> elements;
+    std::variant<HTree *, HArray *> parent;
+    std::string key = "";
+    bool root = true;
     HArray();
+    //HArray(std::variant<HTree *, HArray *> parent);
     ~HArray();
     void addElement(std::variant<HTree*, HArray*, HSimpleValue*> val);
     HArray * deepCopy();
     std::string str();
+    std::string getPath();
     //concatenation
     void concatArrays(HArray * second);
 };
 
 struct HSimpleValue {
     std::variant<int, double, bool, std::string> svalue; 
+    std::variant<HTree *, HArray *> parent;
     std::vector<Token> tokenParts;
+    std::string key = "";
     HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts);
+    //HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts, std::variant<HTree*, HArray*> parent);
     std::string str();
+    std::string getPath();
     HSimpleValue * deepCopy();
 };
 
@@ -48,8 +62,9 @@ struct HSimpleValue {
 //};
 
 struct HSubstitution {
-    std::string path;
-    HSubstitution(std::string s);
+    std::vector<std::string> path;
+    size_t counter = 0;
+    HSubstitution(std::vector<std::string> s);
     ~HSubstitution();
 };
 

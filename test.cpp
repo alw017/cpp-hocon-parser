@@ -44,13 +44,15 @@ void test_parser_hoconSimpleValue() {
     lexer.run();
     HParser parser = HParser(tokens);
     HSimpleValue * v = parser.hoconSimpleValue();
+    HTree * root = new HTree();
+    root->addMember("test", v);
     bool succeed = ASSERT_STRING(v->str(), "testvalue 214 true false m");
     if (succeed) {
         std::cout << "hoconSimpleValue() succeeded" << std::endl;
     } else {
         std::cout << "hoconSimpleValue() failed" << std::endl;
     }
-    delete v;
+    delete root;
 }
 
 void test_parser_hoconTree_simpleValuesOnly() {
@@ -164,6 +166,7 @@ void test_parser_findCreate() {
     }
     std::cout << "Returned object: \n" << parser.findOrCreatePath(out, root)->str() << std::endl;
     std::cout << "After FindCreate: \n" << root->str() << std::endl;
+    delete root;
 }
 
 
