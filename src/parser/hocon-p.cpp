@@ -28,7 +28,7 @@ auto getDeepCopy = Overload {
     [](HSimpleValue * val) { std::variant<HTree*, HArray *, HSimpleValue *> out = val->deepCopy(); return out; },
 };
 
-auto getPath = Overload {
+auto getPathStr = Overload {
     [](HTree * obj) { return obj->getPath(); },
     [](HArray * arr) { return arr->getPath(); },
     [](HSimpleValue * val) { return val->getPath(); },
@@ -154,7 +154,12 @@ std::string HTree::str() {
 
 // TODO
 std::string HTree::getPath() {
-    return "";
+    if (root == true) {
+        return "";
+    } else {
+        std::string parentPath = std::visit(getPathStr, parent);
+        return parentPath == "" ? key : parentPath + "." + key;
+    }
 }
 
 HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
@@ -216,6 +221,15 @@ std::string HArray::str() { // tested,
     return out;
 }
 
+std::string HArray::getPath() {
+    if (root == true) {
+        return "";
+    } else {
+        std::string parentPath = std::visit(getPathStr, parent);
+        return parentPath == "" ? key : parentPath + "." + key;
+    }
+}
+
 void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
     if(std::holds_alternative<HTree*>(val)) {
         HTree * obj = std::get<HTree*>(val);
@@ -254,6 +268,10 @@ std::string HSimpleValue::str() {
         output += t.lexeme;
     }
     return output;
+}
+
+std::string HSimpleValue::getPath() {
+    return std::visit(getPathStr, parent) + "." + key;
 }
 
 HSimpleValue* HSimpleValue::deepCopy() {

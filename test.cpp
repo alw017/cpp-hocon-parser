@@ -169,6 +169,16 @@ void test_parser_findCreate() {
     delete root;
 }
 
+void test_parser_getPath() {
+    HTree * root = new HTree();
+    root->addMember("foo", debug_create_simple_string("test"));
+    HTree * second = new HTree();
+    second->addMember("baz", debug_create_simple_string("value"));
+    root->addMember("bar", second);
+    std::cout << "root obj str: \n" << root->str() << std::endl;
+    std::cout << "getPath() << " << std::get<HSimpleValue*>(second->members["baz"])->getPath() << std::endl;
+}
+
 
 int main() {
     std::cout << "starting tests" << std::endl;
@@ -179,5 +189,6 @@ int main() {
     test_parser_concatArray();
     test_parser_splitPath();
     test_parser_findCreate();
+    test_parser_getPath();
 }
 
