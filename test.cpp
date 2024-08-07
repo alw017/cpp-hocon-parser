@@ -176,7 +176,10 @@ void test_parser_getPath() {
     second->addMember("baz", debug_create_simple_string("value"));
     root->addMember("bar", second);
     std::cout << "root obj str: \n" << root->str() << std::endl;
-    std::cout << "getPath() << " << std::get<HSimpleValue*>(second->members["baz"])->getPath() << std::endl;
+    std::cout << "get Path output: " << std::endl;
+    for( auto s : std::get<HSimpleValue*>(second->members["baz"])->getPath()) {
+        std::cout << s << std::endl;
+    } 
 }
 
 

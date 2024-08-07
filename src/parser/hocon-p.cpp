@@ -153,12 +153,13 @@ std::string HTree::str() {
 }
 
 // TODO
-std::string HTree::getPath() {
+std::vector<std::string> HTree::getPath() {
     if (root == true) {
-        return "";
+        return std::vector<std::string>();
     } else {
-        std::string parentPath = std::visit(getPathStr, parent);
-        return parentPath == "" ? key : parentPath + "." + key;
+        std::vector<std::string> parentPath = std::visit(getPathStr, parent);
+        parentPath.push_back(key);
+        return parentPath;
     }
 }
 
@@ -221,12 +222,13 @@ std::string HArray::str() { // tested,
     return out;
 }
 
-std::string HArray::getPath() {
+std::vector<std::string> HArray::getPath() {
     if (root == true) {
-        return "";
+        return std::vector<std::string>();
     } else {
-        std::string parentPath = std::visit(getPathStr, parent);
-        return parentPath == "" ? key : parentPath + "." + key;
+        std::vector<std::string> parentPath = std::visit(getPathStr, parent);
+        parentPath.push_back(key);
+        return parentPath;
     }
 }
 
@@ -270,8 +272,10 @@ std::string HSimpleValue::str() {
     return output;
 }
 
-std::string HSimpleValue::getPath() {
-    return std::visit(getPathStr, parent) + "." + key;
+std::vector<std::string> HSimpleValue::getPath() {
+    std::vector<std::string> parentPath = std::visit(getPathStr, parent);
+    parentPath.push_back(key);
+    return parentPath;
 }
 
 HSimpleValue* HSimpleValue::deepCopy() {

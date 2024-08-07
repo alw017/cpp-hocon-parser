@@ -21,7 +21,7 @@ struct HTree {
     bool memberExists(std::string key);
     HTree * deepCopy();
     std::string str();
-    std::string getPath();
+    std::vector<std::string> getPath();
 
     //object merge/concatenation
     void mergeTrees(HTree * second);
@@ -38,7 +38,7 @@ struct HArray {
     void addElement(std::variant<HTree*, HArray*, HSimpleValue*> val);
     HArray * deepCopy();
     std::string str();
-    std::string getPath();
+    std::vector<std::string> getPath();
     //concatenation
     void concatArrays(HArray * second);
 };
@@ -51,7 +51,7 @@ struct HSimpleValue {
     HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts);
     //HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts, std::variant<HTree*, HArray*> parent);
     std::string str();
-    std::string getPath();
+    std::vector<std::string> getPath();
     HSimpleValue * deepCopy();
 };
 
