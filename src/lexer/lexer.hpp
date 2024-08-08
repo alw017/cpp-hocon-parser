@@ -39,6 +39,7 @@ class Lexer {
         void comment();
         void whitespace();
         void newline();
+        void substitution(bool optional);
         void pruneInlineWhitespace();
         void pruneAllWhitespace();
         void pruneWsAndComments();

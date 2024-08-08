@@ -235,9 +235,9 @@ void Lexer::scanToken() {
                 advance();
                 if(peek() == '?') {
                     advance();
-                    addToken(SUB_OPTIONAL_BEGIN);
+                    substitution(true);
                 } else {
-                    addToken(SUB_BEGIN);
+                    substitution(false);
                 }
             } else {
                 std::string s(1, peek());
@@ -264,6 +264,25 @@ void Lexer::scanToken() {
 void Lexer::newline() {
     pruneWsAndComments();
     addToken(NEWLINE);
+}
+
+void Lexer::substitution(bool optional) {
+    while(peek() != '}' && !atEnd()) {
+        advance();
+    }
+    if(atEnd()) {
+        error(line, "Unterminated substitution or braces.");
+        return;
+    } else if (peek() == '}') {
+        advance();
+    }
+    if (optional) {
+        std::string text = source.substr(start+3, current-start-4);
+        addToken(SUB_OPTIONAL, text);
+    } else {
+        std::string text = source.substr(start+2, current-start-3);
+        addToken(SUB, text);
+    }
 }
 
 void Lexer::pruneInlineWhitespace() { // prunes all whitespace excluding newline.

@@ -449,7 +449,7 @@ HTree * HParser::rootTree() {
     HTree * target = output;
     while(!atEnd()) { // loop through members
         std::vector<std::string> path = hoconKey(); 
-        std::string keyValue = path[path.size()-1];
+        std::string keyValue = path.size() > 0 ? path[path.size()-1] : "";
         if (path.size() > 1) {
             target = findOrCreatePath(path, output);
         } else {
