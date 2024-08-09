@@ -14,18 +14,21 @@ auto deleteHObj = Overload {
     [](HTree * obj) { delete obj; },
     [](HArray * arr) { delete arr; },
     [](HSimpleValue * val) { delete val; },
+    [](HSubstitution * sub) { delete sub; }
 };
 
 auto stringify = Overload {                                     
     [](HTree * obj) { return obj->str(); },
     [](HArray * arr) { return arr->str(); },
     [](HSimpleValue * val) { return val->str(); },
+    [](HSubstitution * sub) { return sub->str(); }
 };
 
 auto getDeepCopy = Overload {
-    [](HTree * obj) { std::variant<HTree*, HArray *, HSimpleValue *> out = obj->deepCopy(); return out; },
-    [](HArray * arr) { std::variant<HTree*, HArray *, HSimpleValue *> out = arr->deepCopy(); return out; },
-    [](HSimpleValue * val) { std::variant<HTree*, HArray *, HSimpleValue *> out = val->deepCopy(); return out; },
+    [](HTree * obj) { std::variant<HTree*, HArray *, HSimpleValue *, HSubstitution*> out = obj->deepCopy(); return out; },
+    [](HArray * arr) { std::variant<HTree*, HArray *, HSimpleValue *, HSubstitution*> out = arr->deepCopy(); return out; },
+    [](HSimpleValue * val) { std::variant<HTree*, HArray *, HSimpleValue *, HSubstitution*> out = val->deepCopy(); return out; },
+    [](HSubstitution * sub) { std::variant<HTree*, HArray *, HSimpleValue *, HSubstitution*> out = sub->deepCopy(); return out;},
 };
 
 auto getPathStr = Overload {
@@ -37,10 +40,11 @@ auto getPathStr = Overload {
 auto getKey = Overload {
     [](HTree * obj) { return obj->key==""?"root":obj->key; },
     [](HArray * arr) { return arr->key==""?"root":arr->key; },
-    [](HSimpleValue * val) { return val->key; }
+    [](HSimpleValue * val) { return val->key; },
+    [](HSubstitution * sub) { return sub->key; }
 };
 
-HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
+HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>>()) {}
 
 HTree::~HTree() {
     for(auto pair : members) {
@@ -48,7 +52,7 @@ HTree::~HTree() {
     }
 }
 
-void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value) {
+void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value) {
     if(std::holds_alternative<HTree*>(value)) {
         HTree * obj = std::get<HTree*>(value);
         obj->parent = this;
@@ -59,10 +63,14 @@ void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
         arr->parent = this;
         arr->key = key;
         arr->root = false;
-    } else {
+    } else if (std::holds_alternative<HSimpleValue*>(value)){
         HSimpleValue * val = std::get<HSimpleValue*>(value);
         val->parent = this;
         val->key = key;
+    } else {
+        HSubstitution * sub = std::get<HSubstitution*>(value);
+        sub->parent = this;
+        sub->key = key;
     }
     if(members.count(key) == 0) { // new key case
         //std::cout << "added key " << key << " with value " << std::visit(stringify, value) << std::endl;
@@ -163,7 +171,7 @@ std::vector<std::string> HTree::getPath() {
     }
 }
 
-HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*>>()) {}
+HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>>()) {}
 
 HArray::~HArray() {
     for (auto e : elements) {
@@ -232,7 +240,7 @@ std::vector<std::string> HArray::getPath() {
     }
 }
 
-void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
+void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> val) {
     if(std::holds_alternative<HTree*>(val)) {
         HTree * obj = std::get<HTree*>(val);
         obj->parent = this;
@@ -243,10 +251,14 @@ void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*> val) {
         arr->parent = this;
         arr->key = "array element";
         arr->root = false;
-    } else {
+    } else if (std::holds_alternative<HSimpleValue*>(val)) {
         HSimpleValue * value = std::get<HSimpleValue*>(val);
         value->parent = this;
         value->key = "array element";
+    } else {
+        HSubstitution * sub = std::get<HSubstitution*>(val);
+        sub->parent = this;
+        sub->key = "array element";
     }
     elements.push_back(val);
 }
@@ -282,7 +294,33 @@ HSimpleValue* HSimpleValue::deepCopy() {
     return new HSimpleValue(svalue, tokenParts);
 }
 
-HSubstitution::HSubstitution(std::vector<std::string> s) : path(s) {}
+HPath::HPath(std::vector<std::string> s, bool optional) : path(s), optional(optional) {}
+
+HSubstitution::HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, std::string>> v) : values(v) {}
+
+std::string HPath::str() {
+    std::string out;
+    out += (optional ? "${?" : "${");
+    if (path.size() > 0) {
+        out += path[0];
+        for (auto iter = path.begin() +1; iter != path.end(); iter++) {
+            out += "." + *iter;
+        }
+    }
+    out += "}";
+    return out;
+}
+
+HSubstitution * HSubstitution::deepCopy() { // to do
+    //HArray * copy = new HArray();
+    std::vector<std::variant<HTree*,HArray*,HSimpleValue*, HPath*>> copies;
+    //HSubstitution * copy = new HSubstitution();
+    return; // For TOMORROW: make HSubstitution contain all the information instead of adding HPath.
+}
+
+HSubstitution::~HSubstitution() {
+    return;
+}
 
 HParser::~HParser() {
     std::visit(deleteHObj, rootObject);
@@ -528,6 +566,12 @@ HArray * HParser::hoconArray() {
             break;
         }
         if (match(LEFT_BRACE)) { // object case
+            HTree * obj = mergeAdjacentTrees();
+            if(check(SUB)) {
+
+            } else if (check(SUB_OPTIONAL)) {
+
+            }
             output->addElement(mergeAdjacentTrees()); // implied separator case. ex: foo {}
             consumeToNextElement(); 
         } else if (match(LEFT_BRACKET)) { // array case
@@ -536,6 +580,8 @@ HArray * HParser::hoconArray() {
         } else if (check(SIMPLE_VALUES)) { // simple value case
             output->addElement(hoconSimpleValue());
             consumeToNextElement();
+        } else if (check(SUB) || check(SUB_OPTIONAL)) {
+
         } else {
             error(peek().line, "Expected a {, [ or a simple value, got " + peek().lexeme + "', instead");
             consumeMember();

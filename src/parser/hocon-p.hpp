@@ -6,10 +6,11 @@
 
 struct HArray;
 struct HSimpleValue;
+struct HSubstitution;
 //struct HKey;
 
 struct HTree {
-    std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*>> members;
+    std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>> members;
     std::vector<std::string> memberOrder; 
     bool root = true;
     std::variant<HTree *, HArray *> parent;
@@ -17,7 +18,7 @@ struct HTree {
     HTree();
     //HTree(std::variant<HTree *, HArray *> parent);
     ~HTree();
-    void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*> value);
+    void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
     bool memberExists(std::string key);
     HTree * deepCopy();
     std::string str();
@@ -28,14 +29,14 @@ struct HTree {
 };
 
 struct HArray {
-    std::vector<std::variant<HTree*, HArray*, HSimpleValue*>> elements;
+    std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>> elements;
     std::variant<HTree *, HArray *> parent;
     std::string key = "";
     bool root = true;
     HArray();
     //HArray(std::variant<HTree *, HArray *> parent);
     ~HArray();
-    void addElement(std::variant<HTree*, HArray*, HSimpleValue*> val);
+    void addElement(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> val);
     HArray * deepCopy();
     std::string str();
     std::vector<std::string> getPath();
@@ -61,11 +62,25 @@ struct HSimpleValue {
 //    HKey(std::string k, std::vector<Token> t);
 //};
 
-struct HSubstitution {
+struct HPath {
     std::vector<std::string> path;
     size_t counter = 0;
-    HSubstitution(std::vector<std::string> s);
+    std::variant<HTree*,HArray*,HSimpleValue*> parent;
+    std::string key;
+    HPath(std::vector<std::string> s, bool optional);
+    bool optional;
+    std::string str();
+    HSubstitution * deepCopy();
+};
+
+struct HSubstitution {
+    std::vector<std::variant<HTree*, HArray*, HSimpleValue*, std::string>> values;
+    std::variant<HTree*,HArray*,HSimpleValue*> parent;
+    std::string key;
+    HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, std::string>> v);
     ~HSubstitution();
+    std::string str();
+    HSubstitution * deepCopy();
 };
 
 class HParser {
@@ -114,6 +129,7 @@ class HParser {
         static std::vector<std::string> splitPath(std::vector<Token> keyTokens);
         HArray * concatAdjacentArrays();
         HTree * mergeAdjacentTrees();
+        HSubstitution * parseSubstitution();
         
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
         // ^ is automatically performed in hoconSimpleValue();
