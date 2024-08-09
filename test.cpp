@@ -116,9 +116,9 @@ void test_parser_splitString(std::string target) {
     std::vector<Token> tokens;
     Lexer lexer = Lexer(target, tokens);
     lexer.run();
-    std::vector<std::string> out = HParser::splitPath(tokens);
+    std::vector<std::string> out = HParser::splitPath(target);
     for(auto s : out) {
-        //std::cout << s << std::endl;
+        std::cout << s << std::endl;
     }
 }
 
@@ -180,18 +180,39 @@ void test_parser_getPath() {
     for( auto s : std::get<HSimpleValue*>(second->members["baz"])->getPath()) {
         std::cout << s << std::endl;
     } 
+    delete root;
 }
 
+void test_parser_substitution() {
+    std::vector<std::variant<HTree*,HArray*, HSimpleValue*, HPath*>> values;
+    values.push_back(new HTree());
+    values.push_back(new HArray());
+    values.push_back(new HPath(std::vector<std::string>{"test", "path", "boo"}, false));
+    values.push_back(new HSimpleValue("unquotedstring", std::vector<Token>{Token(UNQUOTED_STRING, "unquotedstring", "unquotedstring", 0)}));
+    HSubstitution * sub = new HSubstitution(values);
+    std::cout << sub->str() << std::endl;
+    HTree * root = new HTree();
+    root->addMember("foo", debug_create_simple_string("test"));
+    root->addMember("bar", sub);
+    std::cout << "root string: \n" << root->str() << std::endl;
+    delete root;
+}
 
-int main() {
-    std::cout << "starting tests" << std::endl;
+void run_tests(){
     test_parser_hoconKey();
     test_parser_hoconSimpleValue();
-    test_parser_hoconArray();
+    //test_parser_hoconArray();
     test_parser_mergeTrees();
     test_parser_concatArray();
     test_parser_splitPath();
     test_parser_findCreate();
     test_parser_getPath();
+}
+
+int main() {
+    std::cout << "starting tests" << std::endl;
+    //run_tests();
+    //test_parser_substitution();
+    test_parser_splitString("test.one.two.three.\"dont.split\".end");
 }
 

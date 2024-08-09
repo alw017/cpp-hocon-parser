@@ -3,6 +3,7 @@
 #include <token.hpp>
 #include <unordered_map>
 #include <memory>
+#include <tuple>
 
 struct HArray;
 struct HSimpleValue;
@@ -64,23 +65,24 @@ struct HSimpleValue {
 
 struct HPath {
     std::vector<std::string> path;
-    size_t counter = 0;
-    std::variant<HTree*,HArray*,HSimpleValue*> parent;
-    std::string key;
     HPath(std::vector<std::string> s, bool optional);
+    HPath(Token t);
     bool optional;
     std::string str();
-    HSubstitution * deepCopy();
+    HPath * deepCopy();
 };
 
 struct HSubstitution {
-    std::vector<std::variant<HTree*, HArray*, HSimpleValue*, std::string>> values;
-    std::variant<HTree*,HArray*,HSimpleValue*> parent;
+    std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> values;
+    std::variant<HTree*,HArray*> parent;
+    size_t counter = 0;
+    size_t substitutionType = 0;
     std::string key;
-    HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, std::string>> v);
+    HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> v);
     ~HSubstitution();
     std::string str();
     HSubstitution * deepCopy();
+    std::string getPath();
 };
 
 class HParser {
@@ -112,6 +114,7 @@ class HParser {
         void ignoreInlineWhitespace();
         void consumeMember();
         void consumeElement();
+        void consumeSubstitution();
         void consumeToNextMember();
         void consumeToNextRootMember();
         void consumeToNextElement();
@@ -127,8 +130,10 @@ class HParser {
         //helper methods for creating parsed objects
         HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
         static std::vector<std::string> splitPath(std::vector<Token> keyTokens);
+        static std::vector<std::string> splitPath(std::string path);
         HArray * concatAdjacentArrays();
         HTree * mergeAdjacentTrees();
+        HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
         HSubstitution * parseSubstitution();
         
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
