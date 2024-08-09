@@ -65,6 +65,7 @@ struct HSimpleValue {
 
 struct HPath {
     std::vector<std::string> path;
+    std::string suffixWhitespace;
     HPath(std::vector<std::string> s, bool optional);
     HPath(Token t);
     bool optional;
@@ -76,7 +77,7 @@ struct HSubstitution {
     std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> values;
     std::variant<HTree*,HArray*> parent;
     size_t counter = 0;
-    size_t substitutionType = 0;
+    size_t substitutionType = 3;
     std::string key;
     HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> v);
     ~HSubstitution();

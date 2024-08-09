@@ -17,7 +17,7 @@ char Lexer::advance() {
 void Lexer::addToken(TokenType type) {
     std::string text = source.substr(start, current-start);
     //if (type == WHITESPACE) text = "'" + text + "'"; debug
-    tokens.push_back(Token(type, text, "", line)); 
+    tokens.push_back(Token(type, text, 0, line)); 
 }
 
 void Lexer::addToken(TokenType type, std::string literal) {
@@ -325,7 +325,7 @@ void Lexer::keyword() {
     if (text == "true") {
         addToken(TRUE, true);
     } else if (text == "false") {
-        addToken(FALSE);
+        addToken(FALSE, false);
     } else if (text == "null") {
         addToken(NULLVALUE);
     } else {

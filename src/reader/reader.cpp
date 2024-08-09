@@ -86,7 +86,7 @@ void ConfigFile::runFile() {
         return;
     }
     for (Token t : tokens) {
-        std::cout << t.str() << std::endl;
+        //std::cout << t.str() << std::endl;
     }
     if(std::holds_alternative<HTree*>(parser.rootObject)) {
         HTree* p = std::get<HTree*>(parser.rootObject);

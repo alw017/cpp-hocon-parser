@@ -290,8 +290,12 @@ HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s, std::
 
 std::string HSimpleValue::str() {
     std::string output;
-    for (auto t : tokenParts) {
-        output += t.lexeme;
+    if (std::holds_alternative<std::string>(svalue)) {
+        output = (std::get<std::string>(svalue)[0] == '"') ? std::get<std::string>(svalue) : "\"" + std::get<std::string>(svalue) + "\"";
+    } else {
+        for (auto t : tokenParts) {
+            output += t.lexeme;
+        }
     }
     return output;
 }
@@ -350,17 +354,38 @@ std::string HSubstitution::str() {
             out = "{...}";
         } else if (std::holds_alternative<HArray*>(values[0])) {
             out = "[...]";
-        } else { 
+        } else if (std::holds_alternative<HSimpleValue*>(values[0])){ 
             out = std::visit(stringify, values[0]);
+        } else {
+            out = (substitutionType == 2 || substitutionType == 3) ? "'" + std::visit(stringify, values[0]) + std::get<HPath*>(values[0])->suffixWhitespace + "'" : "'" + std::visit(stringify, values[0]) + "'"; 
         }
-        for(auto iter = values.begin() +1 ; iter != values.end(); iter++) {
-            if (std::holds_alternative<HTree*>(*iter)) {
-                out += " {...}";
-            } else if (std::holds_alternative<HArray*>(*iter)) {
-                out += " [...]";
-            } else { 
-                out += " '" + std::visit(stringify, *iter) + "'";
-            }
+        switch (substitutionType) {
+            case 0:
+            case 1:
+                for(auto iter = values.begin() +1 ; iter != values.end(); iter++) {
+                    if (std::holds_alternative<HTree*>(*iter)) {
+                        out += " {...}";
+                    } else if (std::holds_alternative<HArray*>(*iter)) {
+                        out += " [...]";
+                    } else { 
+                        out += " " + std::visit(stringify, *iter);
+                    }
+                }
+                break;
+            case 2:
+            case 3:
+                for(auto iter = values.begin() +1 ; iter != values.end(); iter++) {
+                    if (std::holds_alternative<HTree*>(*iter)) {
+                        out += " {...}";
+                    } else if (std::holds_alternative<HArray*>(*iter)) {
+                        out += " [...]";
+                    } else if (std::holds_alternative<HPath*>(*iter)) {
+                        out += "'" + std::visit(stringify, *iter) + std::get<HPath*>(*iter)->suffixWhitespace + "'";
+                    } else { 
+                        out += "'" + std::visit(stringify, *iter) + "'";
+                    }
+                }
+                break;
         }
     } else {
         out = "";
@@ -931,8 +956,10 @@ HSubstitution * HParser::parseSubstitution(std::variant<HTree*, HArray*, HSimple
             }
             values.push_back(hoconArray());
         } else if (check(SUB) || check(SUB_OPTIONAL)) { 
-            values.push_back(new HPath(advance()));
+            HPath * path = new HPath(advance());
             if (subType < 2) ignoreInlineWhitespace();
+            else path->suffixWhitespace = check(WHITESPACE) ? advance().lexeme : "";
+            values.push_back(path);
         } else {
             if(subType == 3) {
                 subType = 2;
@@ -944,7 +971,9 @@ HSubstitution * HParser::parseSubstitution(std::variant<HTree*, HArray*, HSimple
             values.push_back(hoconSimpleValue());
         }
     }
-    return new HSubstitution(values);
+    HSubstitution * out = new HSubstitution(values);
+    out->substitutionType = subType;
+    return out;
 }
 
 HSubstitution * HParser::parseSubstitution() {
@@ -970,20 +999,24 @@ HSubstitution * HParser::parseSubstitution() {
             }
             values.push_back(hoconArray());
         } else if (check(SUB) || check(SUB_OPTIONAL)) { 
-            values.push_back(new HPath(advance()));
+            HPath * path = new HPath(advance());
             if (subType < 2) ignoreInlineWhitespace();
+            else path->suffixWhitespace = check(WHITESPACE) ? advance().lexeme : "";
+            values.push_back(path);
         } else {
             if(subType == 3) {
                 subType = 2;
             } else if (subType != 2) {
-                error(peek().line, "substitution mismatched types, expected type " + std::to_string(subType) + "got " + std::to_string(2));
+                error(peek().line, "substitution mismatched types, expected type " + std::to_string(subType) + " got " + std::to_string(2));
                 consumeSubstitution();
                 return new HSubstitution(values);
             }
             values.push_back(hoconSimpleValue());
         }
     }
-    return new HSubstitution(values);
+    HSubstitution * out = new HSubstitution(values);
+    out->substitutionType = subType;
+    return out;
 }
 
 // parsing steps:
