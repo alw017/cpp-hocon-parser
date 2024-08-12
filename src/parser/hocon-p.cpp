@@ -89,6 +89,19 @@ void HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
     } else if (std::holds_alternative<HTree*>(members[key]) && std::holds_alternative<HTree*>(value)) { // object merge case
         std::get<HTree*>(members[key])->mergeTrees(std::get<HTree*>(value));
         //std::cout << "merged object key " << key << " with object " << std::visit(stringify, value) << std::endl;
+    } else if (std::holds_alternative<HSubstitution*>(members[key]) && std::holds_alternative<HTree*>(value)) { // substitution expecting tree or pure substitution case.
+        HSubstitution * sub = std::get<HSubstitution*>(members[key]);
+        if (sub->substitutionType == 0 || sub->substitutionType == 3) {
+            sub->substitutionType = 0;
+            sub->values.push_back(std::get<HTree*>(value));
+        } // add else case here.
+    } else if (std::holds_alternative<HTree*>(members[key]) && std::holds_alternative<HSubstitution*>(value)) { // subsitution onto tree case.
+        HSubstitution * sub = std::get<HSubstitution*>(value);
+        sub->values.insert(sub->values.begin(), std::get<HTree*>(members[key]));
+        if (sub->substitutionType == 3) {
+            sub->substitutionType = 0;
+        }
+        members[key] = value;
     } else { // duplicate key, override case
         std::visit(deleteHObj, members[key]);
         //std::cout << "overrided key " << key << " with value " << std::visit(stringify, value) << std::endl;
@@ -103,7 +116,7 @@ bool HTree::memberExists(std::string key) {
 HTree * HTree::deepCopy() {
     HTree * copy = new HTree();
     for (auto pair : members) {
-        copy->addMember(pair.first, std::visit(getDeepCopy, pair.second));
+        copy->members[pair.first] = std::visit(getDeepCopy, pair.second);
     }
     return copy;
 } 
@@ -132,8 +145,13 @@ std::string HTree::str() {
     }
     std::string out = "{\n";
     if (debug) {
+        std::vector<std::string> test = getPath();
+        std::string a = "";
+        for( auto s : test) {
+            a += s + ".";
+        }
         if(!root) {
-            out = "{ ... parent key = " + std::visit(getKey, parent) + "\n";
+            out = "{ ... path = " + a + "\n";
         } else {
             out = "{ ... root obj \n";
         }
@@ -205,10 +223,15 @@ std::string HArray::str() { // tested,
     }
     std::string out = "[ \n";
     if (debug) {
-        if (!root) {
-            out = "[ ... parent key = " + std::visit(getKey, parent) + "\n";
+        std::vector<std::string> test = getPath();
+        std::string a = "";
+        for( auto s : test) {
+            a += s + ".";
+        }
+        if(!root) {
+            out = "{ ... path = " + a + "\n";
         } else {
-            out = "[ ... root array\n";
+            out = "{ ... root obj \n";
         }
     }
 
@@ -256,21 +279,21 @@ void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*, HSubstituti
     if(std::holds_alternative<HTree*>(val)) {
         HTree * obj = std::get<HTree*>(val);
         obj->parent = this;
-        obj->key = "array element";
+        obj->key = std::to_string(elements.size());
         obj->root = false;
     } else if (std::holds_alternative<HArray*>(val)) {
         HArray * arr = std::get<HArray*>(val);
         arr->parent = this;
-        arr->key = "array element";
+        arr->key = std::to_string(elements.size());
         arr->root = false;
     } else if (std::holds_alternative<HSimpleValue*>(val)) {
         HSimpleValue * value = std::get<HSimpleValue*>(val);
         value->parent = this;
-        value->key = "array element";
+        value->key = std::to_string(elements.size());
     } else {
         HSubstitution * sub = std::get<HSubstitution*>(val);
         sub->parent = this;
-        sub->key = "array element";
+        sub->key = std::to_string(elements.size());
     }
     elements.push_back(val);
 }
@@ -295,6 +318,13 @@ std::string HSimpleValue::str() {
     } else {
         for (auto t : tokenParts) {
             output += t.lexeme;
+        }
+    }
+    if (debug) {
+        std::vector<std::string> path = getPath();
+        output += " ";
+        for(auto str: path) {
+            output += str + ".";
         }
     }
     return output;
@@ -357,7 +387,7 @@ std::string HSubstitution::str() {
         } else if (std::holds_alternative<HSimpleValue*>(values[0])){ 
             out = std::visit(stringify, values[0]);
         } else {
-            out = (substitutionType == 2 || substitutionType == 3) ? "'" + std::visit(stringify, values[0]) + std::get<HPath*>(values[0])->suffixWhitespace + "'" : "'" + std::visit(stringify, values[0]) + "'"; 
+            out = (substitutionType == 2 || (substitutionType == 3 && values.size() > 1)) ? "'" + std::visit(stringify, values[0]) + std::get<HPath*>(values[0])->suffixWhitespace + "'" : "'" + std::visit(stringify, values[0]) + "'"; 
         }
         switch (substitutionType) {
             case 0:
@@ -390,6 +420,13 @@ std::string HSubstitution::str() {
     } else {
         out = "";
     }
+    if (debug) {
+        std::vector<std::string> path = getPath();
+        out += " ";
+        for(auto str : path) {
+            out += str + ".";
+        }
+    }
     return out;
 }
 
@@ -403,9 +440,18 @@ HSubstitution * HSubstitution::deepCopy() { // to do
     return copy;
 }
 
+std::vector<std::string> HSubstitution::getPath() {
+    std::vector<std::string> parentPath = std::visit(getPathStr, parent);
+    parentPath.push_back(key);
+    return parentPath;
+}
+
 
 HParser::~HParser() {
     std::visit(deleteHObj, rootObject);
+    for(auto pair : stack) {
+        //std::visit(deleteHObj, pair.second);
+    }
 }
 
 // look ahead/back helpers
@@ -440,6 +486,20 @@ bool HParser::check(std::vector<TokenType> types) {
 
 bool HParser::atEnd() {
     return peek().type == ENDFILE;
+}
+
+std::string HParser::getStack() {
+    for(auto s : stack) {
+        std::string out = "";
+        for( auto str : s.first) {
+            out += str + ".";
+        }
+        std::cout << out << " " << std::visit(stringify, s.second) << std::endl;
+    }
+}
+
+void HParser::pushStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value) {
+    stack.push_back(std::make_pair(std::visit(getPathStr, value), std::visit(getDeepCopy,value)));
 }
 
 // consume helper methods
@@ -512,9 +572,9 @@ void HParser::consumeElement() {
 */
 void HParser::consumeSubstitution() {
     while(!check(std::vector<TokenType>{NEWLINE, COMMA, RIGHT_BRACKET, RIGHT_BRACE}) && !atEnd()) {
-        if(match(LEFT_BRACE)) {
+        if(previous().type == LEFT_BRACE) {
             delete hoconTree();
-        } else if (match(LEFT_BRACKET)) {
+        } else if (previous().type == LEFT_BRACKET) {
             delete hoconArray();
         }
         else advance();
@@ -543,8 +603,9 @@ void HParser::consumeToNextRootMember() {
         ignoreAllWhitespace();
     } 
     if (!check(SIMPLE_VALUES) && !atEnd()) {
-        error(peek().line, "Unexpected symbol " + peek().lexeme + " after object member");
+        error(peek().line, "Unexpected symbol " + peek().lexeme + " after root object member");
         consumeMember();
+        match(RIGHT_BRACE); // preventing infinite loop from too many closing braces.
     }
 }
 
@@ -596,8 +657,10 @@ HTree * HParser::rootTree() {
             if(check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution(obj);
                 target->addMember(keyValue, sub);
+                pushStack(sub);
             } else {
                 target->addMember(keyValue, obj);
+                pushStack(obj);
             } 
             consumeToNextRootMember();
             // need to add object concatentation here.
@@ -608,32 +671,42 @@ HTree * HParser::rootTree() {
                 if(check(SUB) || check(SUB_OPTIONAL)) {
                     HSubstitution* sub = parseSubstitution(obj);
                     target->addMember(keyValue, sub);
+                    pushStack(sub);
                 } else {
                     target->addMember(keyValue, obj);
+                    pushStack(obj);
                 }
             } else if (match(LEFT_BRACKET)) {
                 HArray * arr = concatAdjacentArrays();
                 if(check(SUB) || check(SUB_OPTIONAL)) {
                     HSubstitution* sub = parseSubstitution(arr);
                     target->addMember(keyValue, sub);
+                    pushStack(sub);
                 } else {
                     target->addMember(keyValue, arr);
+                    pushStack(arr);
                 }
             } else if (check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution();
+                pushStack(sub);
                 target->addMember(keyValue, sub);
             } else {   
                 HSimpleValue * val = hoconSimpleValue();
                 if(check(SUB) || check(SUB_OPTIONAL)) {
                     HSubstitution* sub = parseSubstitution(val);
                     target->addMember(keyValue, sub);
+                    pushStack(sub);
                 } else {
                     target->addMember(keyValue, val);
+                    pushStack(val);
                 }
             }
             consumeToNextRootMember();
         } else {
             error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + keyValue + "'");
+            if (keyValue.size() == 0) {
+                match(RIGHT_BRACE);
+            }
             consumeToNextRootMember();
         }
     }
@@ -664,8 +737,10 @@ HTree * HParser::hoconTree() {
             if(check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution(obj);
                 target->addMember(keyValue, sub);
+                pushStack(sub);
             } else {
                 target->addMember(keyValue, obj);
+                pushStack(obj);
             }
             consumeToNextMember();
         } else if(match(KEY_VALUE_SEP)) {   // explicit separator ex: foo = {}
@@ -675,27 +750,34 @@ HTree * HParser::hoconTree() {
                 if(check(SUB) || check(SUB_OPTIONAL)) {
                     HSubstitution* sub = parseSubstitution(obj);
                     target->addMember(keyValue, sub);
+                    pushStack(sub);
                 } else {
                     target->addMember(keyValue, obj);
+                    pushStack(obj);
                 }
             } else if (match(LEFT_BRACKET)) {
                 HArray * arr = concatAdjacentArrays();
                 if(check(SUB) || check(SUB_OPTIONAL)) {
                     HSubstitution* sub = parseSubstitution(arr);
                     target->addMember(keyValue, sub);
+                    pushStack(sub);
                 } else {
                     target->addMember(keyValue, arr);
+                    pushStack(arr);
                 }
             } else if (check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution();
                 target->addMember(keyValue, sub);
+                pushStack(sub);
             } else {   
                 HSimpleValue * val = hoconSimpleValue();
                 if(check(SUB) || check(SUB_OPTIONAL)) {
                     HSubstitution* sub = parseSubstitution(val);
                     target->addMember(keyValue, sub);
+                    pushStack(sub);
                 } else {
                     target->addMember(keyValue, val);
+                    pushStack(val);
                 }
             }
             consumeToNextMember();
@@ -831,11 +913,13 @@ HTree * HParser::findOrCreatePath(std::vector<std::string> path, HTree * parent)
                 pathExists = false;
                 HTree * obj = new HTree();
                 current->addMember(*iter, obj);
+                pushStack(obj);
                 current = obj;
             }
         } else { // loop found a non-existent key in the past, no need to double check when there will never be a key.
             HTree * obj = new HTree();
             current->addMember(*iter, obj);
+            pushStack(obj);
             current = obj;
         }
     }
@@ -979,7 +1063,7 @@ HSubstitution * HParser::parseSubstitution(std::variant<HTree*, HArray*, HSimple
 HSubstitution * HParser::parseSubstitution() {
     std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> values;
     size_t subType = 3;
-    while(!match(NEWLINE) && !check(COMMA) && !atEnd()) {
+    while(!match(NEWLINE) && !check(std::vector<TokenType>{COMMA, RIGHT_BRACE, RIGHT_BRACKET}) && !atEnd()) {
         if(match(LEFT_BRACE)){
             if(subType == 3) {
                 subType = 0;
@@ -1047,7 +1131,6 @@ void HParser::parseTokens() {
 std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
 
 // split string by delimiter helper. 
-
 
 // access methods:
 

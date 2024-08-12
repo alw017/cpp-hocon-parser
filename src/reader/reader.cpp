@@ -99,6 +99,8 @@ void ConfigFile::runFile() {
         HArray * p = std::get<HArray*>(parser.rootObject);
         std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
+
+    parser.getStack();
     
     /*
     for (auto t : tree->members) {

@@ -83,12 +83,13 @@ struct HSubstitution {
     ~HSubstitution();
     std::string str();
     HSubstitution * deepCopy();
-    std::string getPath();
+    std::vector<std::string> getPath();
 };
 
 class HParser {
     public: // change to private later
         //file properties
+        std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> stack;
         bool rootBrace = true; // rootBrace must be true if the root object is HArray.
         bool validConf = true;
         std::variant<HTree *, HArray *> rootObject;
@@ -106,6 +107,8 @@ class HParser {
 
         //state checking
         bool atEnd();
+        std::string getStack();
+        void pushStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
         
         //consume
         Token advance();
