@@ -70,6 +70,7 @@ struct HPath {
     HPath(std::vector<std::string> s, bool optional);
     HPath(Token t);
     bool optional;
+    int counter = -1;
     std::string str();
     HPath * deepCopy();
     bool isSelfReference();
@@ -78,7 +79,6 @@ struct HPath {
 struct HSubstitution {
     std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> values;
     std::variant<HTree*,HArray*> parent;
-    size_t counter = 0;
     size_t substitutionType = 3;
     std::string key;
     HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> v);
@@ -96,6 +96,7 @@ class HParser {
         bool validConf = true;
         std::variant<HTree *, HArray *> rootObject;
         std::vector<Token> tokenList;
+        std::vector<HSubstitution*> unresolvedSubs;
         int start = 0;      // refactor to size_t later.
         int current = 0;
         int length;
@@ -111,7 +112,8 @@ class HParser {
         bool atEnd();
         void getStack();
         void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
-        
+        void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value, HSubstitution *);
+
         //consume
         Token advance();
         bool match(TokenType type);
@@ -129,16 +131,18 @@ class HParser {
         HTree * rootTree();
         HTree * hoconTree(std::vector<std::string> parentPath);
         HArray * hoconArray();
+        HTree * hoconArraySubTree();
         HSimpleValue * hoconSimpleValue();
         //std::vector<std::string> hoconKey();
         std::vector<std::string> hoconKey();
 
         //helper methods for creating parsed objects
-        HTree * findOrCreatePath(std::vector<std::string> parentPath, std::vector<std::string> path, HTree * parent);
+        HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
         static std::vector<std::string> splitPath(std::vector<Token> keyTokens);
         static std::vector<std::string> splitPath(std::string path);
         HArray * concatAdjacentArrays();
         HTree * mergeAdjacentTrees(std::vector<std::string> parentPath);
+        HTree * mergeAdjacentArraySubTrees();
         HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
         HSubstitution * parseSubstitution();
         
