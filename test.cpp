@@ -164,7 +164,7 @@ void test_parser_findCreate() {
     for(auto s : out) {
         //std::cout << s << std::endl;
     }
-    std::cout << "Returned object: \n" << parser.findOrCreatePath(out, root)->str() << std::endl;
+    std::cout << "Returned object: \n" << parser.findOrCreatePath(std::vector<std::string>(), out, root)->str() << std::endl;
     std::cout << "After FindCreate: \n" << root->str() << std::endl;
     delete root;
 }

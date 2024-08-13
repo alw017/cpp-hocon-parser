@@ -96,7 +96,7 @@ void ConfigFile::runFile() {
         }
         std::cout << "Root Object String: \n" << p->str() << std::endl;
         HTree * deepCopy = p->deepCopy();
-        std::cout << "Deep Copy Object String: \n" << deepCopy->str() << std::endl;
+        //std::cout << "Deep Copy Object String: \n" << deepCopy->str() << std::endl;
         delete deepCopy;
     } else if (std::holds_alternative<HArray*>(parser.rootObject)) {
         HArray * p = std::get<HArray*>(parser.rootObject);

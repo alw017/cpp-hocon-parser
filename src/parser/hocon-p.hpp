@@ -19,7 +19,7 @@ struct HTree {
     HTree();
     //HTree(std::variant<HTree *, HArray *> parent);
     ~HTree();
-    void addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
+    bool addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
     bool memberExists(std::string key);
     HTree * deepCopy();
     std::string str();
@@ -66,11 +66,13 @@ struct HSimpleValue {
 struct HPath {
     std::vector<std::string> path;
     std::string suffixWhitespace;
+    HSubstitution* parent;
     HPath(std::vector<std::string> s, bool optional);
     HPath(Token t);
     bool optional;
     std::string str();
     HPath * deepCopy();
+    bool isSelfReference();
 };
 
 struct HSubstitution {
@@ -108,7 +110,7 @@ class HParser {
         //state checking
         bool atEnd();
         void getStack();
-        void pushStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
+        void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
         
         //consume
         Token advance();
@@ -125,18 +127,18 @@ class HParser {
 
         //create parsed objects :: Assignment
         HTree * rootTree();
-        HTree * hoconTree();
+        HTree * hoconTree(std::vector<std::string> parentPath);
         HArray * hoconArray();
         HSimpleValue * hoconSimpleValue();
         //std::vector<std::string> hoconKey();
         std::vector<std::string> hoconKey();
 
         //helper methods for creating parsed objects
-        HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
+        HTree * findOrCreatePath(std::vector<std::string> parentPath, std::vector<std::string> path, HTree * parent);
         static std::vector<std::string> splitPath(std::vector<Token> keyTokens);
         static std::vector<std::string> splitPath(std::string path);
         HArray * concatAdjacentArrays();
-        HTree * mergeAdjacentTrees();
+        HTree * mergeAdjacentTrees(std::vector<std::string> parentPath);
         HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
         HSubstitution * parseSubstitution();
         
