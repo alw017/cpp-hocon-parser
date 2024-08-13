@@ -107,7 +107,7 @@ class HParser {
 
         //state checking
         bool atEnd();
-        std::string getStack();
+        void getStack();
         void pushStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
         
         //consume

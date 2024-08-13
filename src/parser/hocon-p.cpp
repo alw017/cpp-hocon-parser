@@ -2,7 +2,7 @@
 
 const std::string INDENT = "    "; 
 
-bool debug = false;
+bool debug = true;
 
 template<typename ... Ts>                                                 
 struct Overload : Ts ... { 
@@ -116,7 +116,7 @@ bool HTree::memberExists(std::string key) {
 HTree * HTree::deepCopy() {
     HTree * copy = new HTree();
     for (auto pair : members) {
-        copy->members[pair.first] = std::visit(getDeepCopy, pair.second);
+        copy->addMember(pair.first, std::visit(getDeepCopy, pair.second));
     }
     return copy;
 } 
@@ -450,7 +450,7 @@ std::vector<std::string> HSubstitution::getPath() {
 HParser::~HParser() {
     std::visit(deleteHObj, rootObject);
     for(auto pair : stack) {
-        //std::visit(deleteHObj, pair.second);
+        std::visit(deleteHObj, pair.second);
     }
 }
 
@@ -488,18 +488,22 @@ bool HParser::atEnd() {
     return peek().type == ENDFILE;
 }
 
-std::string HParser::getStack() {
+void HParser::getStack() {
+
     for(auto s : stack) {
         std::string out = "";
-        for( auto str : s.first) {
-            out += str + ".";
+        if (s.first.size() > 0) {
+            for(auto str : s.first) {
+                out += str;
+            }
         }
-        std::cout << out << " " << std::visit(stringify, s.second) << std::endl;
+        std::cout << out;
+        std::cout << std::visit(stringify, s.second) << std::endl;
     }
 }
 
 void HParser::pushStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value) {
-    stack.push_back(std::make_pair(std::visit(getPathStr, value), std::visit(getDeepCopy,value)));
+    stack.push_back(std::make_pair(std::visit(getPathStr, value), new HTree()));
 }
 
 // consume helper methods
