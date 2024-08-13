@@ -114,7 +114,10 @@ bool HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
     } else if (std::holds_alternative<HSubstitution*>(members[key]) && std::holds_alternative<HSubstitution*>(value)) { // double substitution case.
         HSubstitution * sub = std::get<HSubstitution*>(members[key]);
         HSubstitution * add = std::get<HSubstitution*>(value);
-        sub->values.insert(sub->values.end(), std::begin(add->values), std::end(add->values));
+        for(auto element : add->values) {
+            sub->values.push_back(std::visit(subDeepCopy, element));
+        }
+        delete add;
         return true;
     } else { // duplicate key, override case
         std::visit(deleteHObj, members[key]);
@@ -1295,6 +1298,7 @@ HSubstitution * HParser::parseSubstitution(std::variant<HTree*, HArray*, HSimple
     }
     HSubstitution * out = new HSubstitution(values);
     out->substitutionType = subType;
+    //unresolvedSubs.push_back(out);
     return out;
 }
 
@@ -1364,7 +1368,9 @@ void HParser::parseTokens() {
     }
 }
 
-// void resolveSubstitutions() {}
+void HParser::resolveSubstitutions() {
+
+}
 
 std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
 
