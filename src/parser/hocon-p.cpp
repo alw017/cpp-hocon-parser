@@ -379,7 +379,7 @@ std::string HPath::str() {
             out += "." + *iter;
         }
     }
-    out += "} counter = " + std::to_string(counter) + " ";
+    out += "}";
     return out;
 }
 
@@ -1314,7 +1314,7 @@ HSubstitution * HParser::parseSubstitution() {
                 consumeSubstitution();
                 return new HSubstitution(values);
             }
-            values.push_back(hoconTree(std::vector<std::string>{"substitution"}));
+            values.push_back(hoconArraySubTree());
         } else if (match(LEFT_BRACKET)) {
             if(subType == 3) {
                 subType = 1;
@@ -1369,7 +1369,7 @@ void HParser::parseTokens() {
 }
 
 void HParser::resolveSubstitutions() {
-
+    
 }
 
 std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
