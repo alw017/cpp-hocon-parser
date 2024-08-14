@@ -62,6 +62,13 @@ auto getKey = Overload {
     [](HSubstitution * sub) { return sub->key; }
 };
 
+auto getSubstitutions = Overload {
+    [](HTree * obj) { return obj->getUnresolvedSubs(); },
+    [](HArray * arr) { return arr->getUnresolvedSubs(); },
+    [](HSimpleValue * val) { return std::vector<HSubstitution*>(); },
+    [](HSubstitution * sub) { return std::vector<HSubstitution*>{sub}; }
+};
+
 HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>>()) {}
 
 HTree::~HTree() {
@@ -104,6 +111,7 @@ bool HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
             sub->substitutionType = 0;      
         } 
         sub->values.push_back(std::get<HTree*>(value));
+        sub->interrupts.push_back(true);
     } else if (std::holds_alternative<HTree*>(members[key]) && std::holds_alternative<HSubstitution*>(value)) { // subsitution onto tree case.
         HSubstitution * sub = std::get<HSubstitution*>(value);
         sub->values.insert(sub->values.begin(), std::get<HTree*>(members[key]));
@@ -114,8 +122,14 @@ bool HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
     } else if (std::holds_alternative<HSubstitution*>(members[key]) && std::holds_alternative<HSubstitution*>(value)) { // double substitution case.
         HSubstitution * sub = std::get<HSubstitution*>(members[key]);
         HSubstitution * add = std::get<HSubstitution*>(value);
-        for(auto element : add->values) {
-            sub->values.push_back(std::visit(subDeepCopy, element));
+        for(auto iter = add->values.begin(); iter != add->values.end(); iter++) {
+            std::variant<HTree*, HArray*, HSimpleValue*, HPath*> valueCopy = std::visit(subDeepCopy, *iter);
+            sub->interrupts.push_back(iter == add->values.begin());
+            sub->values.push_back(valueCopy);
+            if (std::holds_alternative<HPath*>(valueCopy)) {
+                std::get<HPath*>(valueCopy)->parent = sub;
+                sub->paths.push_back(std::get<HPath*>(valueCopy));
+            }
         }
         delete add;
         return true;
@@ -139,23 +153,6 @@ HTree * HTree::deepCopy() {
     return copy;
 } 
 
-/* 
-    Merge method for trees. second parameter members take precedence (overwrite) the first.
-    deletes the pointer after being done. this may need to be changed later. 
-*/
-void HTree::mergeTrees(HTree * second) {
-    for(auto pair : second->members) {
-        if (members.count(pair.first) == 0) { // not exist case;
-            addMember(pair.first, std::visit(getDeepCopy, pair.second));
-        } else if (std::holds_alternative<HTree*>(members[pair.first]) && std::holds_alternative<HTree*>(pair.second)) { // exists, both objects
-            std::get<HTree*>(members[pair.first])->mergeTrees(std::get<HTree*>(pair.second));
-        } else { // exists but not both objects
-            //std::visit(deleteHObj, members[pair.first]);
-            addMember(pair.first, std::visit(getDeepCopy, pair.second));
-        }
-    }
-    delete second;
-}
 
 std::string HTree::str() {
     if(members.empty()) {
@@ -217,6 +214,33 @@ std::vector<std::string> HTree::getPath() {
         parentPath.push_back(key);
         return parentPath;
     }
+}
+
+/* 
+    Merge method for trees. second parameter members take precedence (overwrite) the first.
+    deletes the pointer after being done. this may need to be changed later. 
+*/
+void HTree::mergeTrees(HTree * second) {
+    for(auto pair : second->members) {
+        if (members.count(pair.first) == 0) { // not exist case;
+            addMember(pair.first, std::visit(getDeepCopy, pair.second));
+        } else if (std::holds_alternative<HTree*>(members[pair.first]) && std::holds_alternative<HTree*>(pair.second)) { // exists, both objects
+            std::get<HTree*>(members[pair.first])->mergeTrees(std::get<HTree*>(pair.second));
+        } else { // exists but not both objects
+            //std::visit(deleteHObj, members[pair.first]);
+            addMember(pair.first, std::visit(getDeepCopy, pair.second));
+        }
+    }
+    delete second;
+}
+
+std::vector<HSubstitution*> HTree::getUnresolvedSubs() {
+    std::vector<HSubstitution*> out;
+    for (auto pair : members) {
+        std::vector<HSubstitution*> curr = std::visit(getSubstitutions, pair.second);
+        out.insert(out.end(), curr.begin(), curr.end());
+    }
+    return out;
 }
 
 HArray::HArray() : elements(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>>()) {}
@@ -327,6 +351,15 @@ void HArray::concatArrays(HArray * second) {
     delete second;
 }
 
+std::vector<HSubstitution*> HArray::getUnresolvedSubs() {
+    std::vector<HSubstitution*> out;
+    for (auto e : elements) {
+        std::vector<HSubstitution*> curr = std::visit(getSubstitutions, e);
+        out.insert(out.end(), curr.begin(), curr.end());
+    }
+    return out;
+}
+
 HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts): svalue(s), tokenParts(tokenParts) {}
 
 std::string HSimpleValue::str() {
@@ -380,12 +413,15 @@ std::string HPath::str() {
         }
     }
     out += "}";
+    if(parent){
+        out += " - path: " + pathToString(parent->getPath());
+    }
     return out;
 }
 
 HPath * HPath::deepCopy() {
     HPath * out = new HPath(path, optional);
-    out->parent = nullptr;
+    out->counter = this->counter;
     return out;
 }
 
@@ -407,7 +443,9 @@ HSubstitution::HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleVa
     values = v;
     for(auto val : values) {
         if(std::holds_alternative<HPath*>(val)) {
-            std::get<HPath*>(val)->parent = this;
+            HPath * path = std::get<HPath*>(val);
+            path->parent = this;
+            paths.push_back(path);
         }
     }
 }
@@ -428,7 +466,7 @@ std::string HSubstitution::str() {
         } else if (std::holds_alternative<HSimpleValue*>(values[0])){ 
             out = std::visit(stringify, values[0]);
         } else {
-            out = (substitutionType == 2 || (substitutionType == 3 && values.size() > 1)) ? "'" + std::visit(stringify, values[0]) + std::get<HPath*>(values[0])->suffixWhitespace + "'" : "'" + std::visit(stringify, values[0]) + "'"; 
+            out = (substitutionType == 2 || (substitutionType == 3 && values.size() > 1)) ? std::visit(stringify, values[0]) + std::get<HPath*>(values[0])->suffixWhitespace : std::visit(stringify, values[0]); 
         }
         switch (substitutionType) {
             case 0:
@@ -451,9 +489,9 @@ std::string HSubstitution::str() {
                     } else if (std::holds_alternative<HArray*>(*iter)) {
                         out += " [...]";
                     } else if (std::holds_alternative<HPath*>(*iter)) {
-                        out += "'" + std::visit(stringify, *iter) + std::get<HPath*>(*iter)->suffixWhitespace + "'";
+                        out += std::visit(stringify, *iter) + std::get<HPath*>(*iter)->suffixWhitespace;
                     } else { 
-                        out += "'" + std::visit(stringify, *iter) + "'";
+                        out += std::visit(stringify, *iter);
                     }
                 }
                 break;
@@ -469,20 +507,29 @@ std::string HSubstitution::str() {
         }
     }
     //out += " stack counter = " + std::to_string(counter);
+    out += "interrupts: ";
+    for(auto b : interrupts) {
+        out += b ? "true " : "false "; 
+    }
     return out;
 }
 
-HSubstitution * HSubstitution::deepCopy() { // to do
+HSubstitution * HSubstitution::deepCopy() {
     //HArray * copy = new HArray();
-    std::vector<std::variant<HTree*,HArray*,HSimpleValue*, HPath*>> copies;
+    std::vector<std::variant<HTree*,HArray*,HSimpleValue*, HPath*>> copies; 
     for (auto obj : values) {
         copies.push_back(std::visit(subDeepCopy, obj));
     }
     HSubstitution * copy = new HSubstitution(copies);
+    copy->parent = this->parent;
+    copy->key = this->key;
     return copy;
 }
 
 std::vector<std::string> HSubstitution::getPath() {
+    if (std::holds_alternative<HTree*>(parent)) {
+        if(!std::get<HTree*>(parent)) return std::vector<std::string>{"getpath on sub failed..."};
+    }
     std::vector<std::string> parentPath = std::visit(getPathStr, parent);
     parentPath.push_back(key);
     return parentPath;
@@ -493,6 +540,9 @@ HParser::~HParser() {
     std::visit(deleteHObj, rootObject);
     for(auto pair : stack) {
         std::visit(deleteHObj, pair.second);
+    }
+    for(auto sub : unresolvedSubs) {
+        delete sub;
     }
 }
 
@@ -554,6 +604,7 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
                 hpath->counter = hpath->counter == -1 ? stack.size() : hpath->counter; 
             }
         }
+        //unresolvedSubs.push_back(sub->deepCopy());
     }
     stack.push_back(std::make_pair(path, std::visit(getDeepCopy, value))); // leave it for now, a potential fix if this causes memory issues is creating a new tree that points to earlier copies in the stack, instead of creating a new deep copy.
 }
@@ -931,6 +982,7 @@ HArray * HParser::hoconArray() {
                         std::get<HPath*>(val)->counter = stack.size();
                     }
                 }
+                //unresolvedSubs.push_back(sub->deepCopy());
             } else {
                 output->addElement(obj);
             }
@@ -945,6 +997,7 @@ HArray * HParser::hoconArray() {
                         std::get<HPath*>(val)->counter = stack.size();
                     }
                 }
+                //unresolvedSubs.push_back(sub->deepCopy());
             } else {
                 output->addElement(arr);
             }
@@ -959,6 +1012,7 @@ HArray * HParser::hoconArray() {
                         std::get<HPath*>(val)->counter = stack.size();
                     }
                 }
+                //unresolvedSubs.push_back(sub->deepCopy());
             } else {
                 output->addElement(val);
             }
@@ -971,6 +1025,7 @@ HArray * HParser::hoconArray() {
                     std::get<HPath*>(val)->counter = stack.size();
                 }
             }
+            //unresolvedSubs.push_back(sub->deepCopy());
             consumeToNextElement();
         } else {
             error(peek().line, "Expected a {, [ or a simple value, got " + peek().lexeme + "', instead");
@@ -1003,9 +1058,10 @@ HTree * HParser::hoconArraySubTree() {
             HTree * obj = mergeAdjacentArraySubTrees();
             if(check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution(obj);
-                target->addMember(keyValue, sub);
+                if (!target->addMember(keyValue, sub)) { // return false indicates there was no merge (obj or substitution)
+                    //unresolvedSubs.push_back(sub->deepCopy());
+                }
             } else {
-                //target->addMember(keyValue, obj);
                 target->addMember(keyValue, obj); // the method returns true if the passed pointer was deleted.
             }
             consumeToNextMember();
@@ -1021,7 +1077,9 @@ HTree * HParser::hoconArraySubTree() {
                             hpath->counter = hpath->counter == -1 ? stack.size() : hpath->counter; 
                         }
                     }
-                    target->addMember(keyValue, sub);
+                    if (!target->addMember(keyValue, sub)) { // return false indicates there was no merge (obj or substitution)
+                        //unresolvedSubs.push_back(sub->deepCopy());
+                    }
                 } else {
                     //target->addMember(keyValue, obj);
                     target->addMember(keyValue, obj); // the method returns true if the passed pointer was deleted.
@@ -1036,7 +1094,9 @@ HTree * HParser::hoconArraySubTree() {
                             hpath->counter = hpath->counter == -1 ? stack.size() : hpath->counter; 
                         }
                     }
-                    target->addMember(keyValue, sub);
+                    if (!target->addMember(keyValue, sub)) { // return false indicates there was no merge (obj or substitution)
+                        //unresolvedSubs.push_back(sub->deepCopy());
+                    }
                 } else {
                     target->addMember(keyValue, arr);
                 }
@@ -1048,7 +1108,9 @@ HTree * HParser::hoconArraySubTree() {
                         hpath->counter = hpath->counter == -1 ? stack.size() : hpath->counter; 
                     }
                 }
-                target->addMember(keyValue, sub);
+                if (!target->addMember(keyValue, sub)) { // return false indicates there was no merge (obj or substitution)
+                    //unresolvedSubs.push_back(sub->deepCopy());
+                }
             } else {   
                 HSimpleValue * val = hoconSimpleValue();
                 if(check(SUB) || check(SUB_OPTIONAL)) {
@@ -1059,7 +1121,9 @@ HTree * HParser::hoconArraySubTree() {
                             hpath->counter = hpath->counter == -1 ? stack.size() : hpath->counter; 
                         }
                     }
-                    target->addMember(keyValue, sub);
+                    if (!target->addMember(keyValue, sub)) { // return false indicates there was no merge (obj or substitution)
+                        //unresolvedSubs.push_back(sub->deepCopy());
+                    }
                 } else {
                     target->addMember(keyValue, val);
                 }
@@ -1297,8 +1361,10 @@ HSubstitution * HParser::parseSubstitution(std::variant<HTree*, HArray*, HSimple
         }
     }
     HSubstitution * out = new HSubstitution(values);
+    for (auto element : values) {
+        out->interrupts.push_back(false);
+    }
     out->substitutionType = subType;
-    //unresolvedSubs.push_back(out);
     return out;
 }
 
@@ -1341,6 +1407,9 @@ HSubstitution * HParser::parseSubstitution() {
         }
     }
     HSubstitution * out = new HSubstitution(values);
+    for (auto element : values) {
+        out->interrupts.push_back(false);
+    }
     out->substitutionType = subType;
     return out;
 }
@@ -1369,7 +1438,80 @@ void HParser::parseTokens() {
 }
 
 void HParser::resolveSubstitutions() {
-    
+    std::vector<HSubstitution*> subs = getUnresolvedSubs();
+    for(auto sub : subs) {
+        std::variant<HTree*, HArray*, HSimpleValue*> finalValue;
+        switch(sub->values[0].index()) {
+            case 0:
+                finalValue = std::get<HTree*>(sub->values[0]);
+                break;
+            case 1:
+                finalValue = std::get<HArray*>(sub->values[0]);
+                break;
+            case 2:
+                finalValue = std::get<HSimpleValue*>(sub->values[0]);
+                break;
+            case 3:
+                finalValue = new HSimpleValue("", std::vector<Token>{Token(UNQUOTED_STRING, "", "", 0)});
+                break;
+        }
+        for (size_t i = 1; i < sub->values.size(); i++) {
+            if (sub->interrupts[i]) {
+                switch(sub->values[i].index()) {
+                    case 0:
+                        finalValue = std::get<HTree*>(sub->values[i]);
+                        break;
+                    case 1:
+                        finalValue = std::get<HArray*>(sub->values[i]);
+                        break;
+                    case 2:
+                        finalValue = std::get<HSimpleValue*>(sub->values[i]);
+                        break;
+                    case 3:
+                        // do nothing 
+                        break;
+                }
+            } else {
+                if(sub->values[i].index() == 3) continue; // skip for now
+                if(finalValue.index() == sub->values[i].index()) {
+                    switch(finalValue.index()) {
+                        case 0:
+                            std::get<HTree*>(finalValue)->mergeTrees(std::get<HTree*>(sub->values[i])->deepCopy());
+                            break;
+                        case 1:
+                            std::get<HArray*>(finalValue)->concatArrays(std::get<HArray*>(sub->values[i])->deepCopy());
+                            break;
+                        case 2:
+                            HSimpleValue* val = std::get<HSimpleValue*>(finalValue);
+                            std::string newStr = "";
+                            std::vector<Token> newTokens = std::get<HSimpleValue*>(sub->values[i])->tokenParts;
+                            //val->tokenParts.insert(val->tokenParts.end(), newTokens.begin(), newTokens.end());
+                    }
+                } else {
+                    error(0, "The substitution" + std::visit(stringify, sub->values[i]) + "Expected a type " + std::to_string(finalValue.index()) + ", got " + std::to_string(sub->values[i].index()));
+                }
+            }
+        }
+        if (std::holds_alternative<HTree*>(sub->parent)) {
+            std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> wrapper;
+            switch(finalValue.index()) {
+                case 0:
+                    wrapper = std::get<HTree*>(finalValue);
+                    break;
+                case 1:
+                    wrapper = std::get<HArray*>(finalValue);
+                    break;
+                case 2:
+                    wrapper = std::get<HSimpleValue*>(finalValue);
+                    break;
+            }
+            std::get<HTree*>(sub->parent)->members[sub->key] = wrapper;
+        }
+    }
+}
+
+std::vector<HSubstitution*> HParser::getUnresolvedSubs() {
+    return std::visit(getSubstitutions, rootObject);
 }
 
 std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
@@ -1387,4 +1529,18 @@ void HParser::error(int line, std::string message) {
 
 void HParser::report(int line, std::string where, std::string message) {
     std::cerr << "[line " << line << "] Error" << where << ": " << message << std::endl;
+}
+
+bool HParser::run() {
+    parseTokens();
+    if (!validConf) {
+        std::cout << "Invalid Configu ration, Aborted" << std::endl;
+        std::cout << "Dumping tokens..." << std::endl;
+        for (Token t : tokenList) {
+            std::cout << t.str() << std::endl;
+        }
+        return false;
+    }
+    resolveSubstitutions();
+    return true;
 }

@@ -105,6 +105,20 @@ void ConfigFile::runFile() {
 
     parser.getStack();
     
+    std::vector<HSubstitution*> unresolvedSubs = parser.getUnresolvedSubs();
+
+    for (auto sub : unresolvedSubs) {
+        std::string handles = "";
+        for (auto unresolvedPath : sub->paths) {
+            handles += (unresolvedPath->isSelfReference()?"selfref[":"rootref[") + std::to_string(unresolvedPath->counter) + "] ";
+        }
+        std::cout << sub->str();
+        std::cout << ((sub->paths.size() > 1) ? ", with handles " : ", with handle ") << handles << std::endl;
+    }
+    
+    parser.resolveSubstitutions();
+    std::cout << "Root Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
+
     /*
     for (auto t : tree->members) {
             std::cout << t.first->key << " : " << std::endl;

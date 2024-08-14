@@ -27,6 +27,7 @@ struct HTree {
 
     //object merge/concatenation
     void mergeTrees(HTree * second);
+    std::vector<HSubstitution*> getUnresolvedSubs();
 };
 
 struct HArray {
@@ -43,6 +44,7 @@ struct HArray {
     std::vector<std::string> getPath();
     //concatenation
     void concatArrays(HArray * second);
+    std::vector<HSubstitution*> getUnresolvedSubs();
 };
 
 struct HSimpleValue {
@@ -78,6 +80,8 @@ struct HPath {
 
 struct HSubstitution {
     std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> values;
+    std::vector<bool> interrupts;
+    std::vector<HPath*> paths;
     std::variant<HTree*,HArray*> parent;
     size_t substitutionType = 3;
     std::string key;
@@ -152,6 +156,7 @@ class HParser {
         //parsing steps:
         void parseTokens(); // first pass, creating AST and merging whenever possible.
         void resolveSubstitutions(); // second pass, resolving substitutions and resolving the remaining merges dependent on substitutions.
+        std::vector<HSubstitution*> getUnresolvedSubs(); // helpermethod for resolveSubstitutions that traverses the root tree for all HSub... objects.
         /*
          * Note: to do substitutions, we need to keep an auxillary file keeping track of all object member additions and modifications
          * also, we need to give the substitution a handle on where to enter the file, if it is a self referential substitution.
