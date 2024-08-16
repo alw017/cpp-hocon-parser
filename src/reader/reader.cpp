@@ -105,7 +105,7 @@ void ConfigFile::runFile() {
 
     parser.getStack();
     
-    std::vector<HSubstitution*> unresolvedSubs = parser.getUnresolvedSubs();
+    std::unordered_set<HSubstitution*> unresolvedSubs = parser.getUnresolvedSubs();
 
     for (auto sub : unresolvedSubs) {
         std::string handles = "";
@@ -117,7 +117,7 @@ void ConfigFile::runFile() {
     }
     
     parser.resolveSubstitutions();
-    std::cout << "Root Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
+    //std::cout << "Root Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
 
     /*
     for (auto t : tree->members) {

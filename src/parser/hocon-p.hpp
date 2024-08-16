@@ -2,6 +2,7 @@
 #include <lexer.hpp>
 #include <token.hpp>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <tuple>
 
@@ -27,7 +28,7 @@ struct HTree {
 
     //object merge/concatenation
     void mergeTrees(HTree * second);
-    std::vector<HSubstitution*> getUnresolvedSubs();
+    std::unordered_set<HSubstitution*> getUnresolvedSubs();
 };
 
 struct HArray {
@@ -43,8 +44,8 @@ struct HArray {
     std::string str();
     std::vector<std::string> getPath();
     //concatenation
-    void concatArrays(HArray * second);
-    std::vector<HSubstitution*> getUnresolvedSubs();
+    void concatArrays(HArray* second);
+    std::unordered_set<HSubstitution*> getUnresolvedSubs();
 };
 
 struct HSimpleValue {
@@ -57,6 +58,7 @@ struct HSimpleValue {
     std::string str();
     std::vector<std::string> getPath();
     HSimpleValue * deepCopy();
+    //void concatSimpleValues(HSimpleValue* second);
 };
 
 //struct HKey {
@@ -156,11 +158,18 @@ class HParser {
         //parsing steps:
         void parseTokens(); // first pass, creating AST and merging whenever possible.
         void resolveSubstitutions(); // second pass, resolving substitutions and resolving the remaining merges dependent on substitutions.
-        std::vector<HSubstitution*> getUnresolvedSubs(); // helpermethod for resolveSubstitutions that traverses the root tree for all HSub... objects.
+        std::unordered_set<HSubstitution*> getUnresolvedSubs(); // helpermethod for resolveSubstitutions that traverses the root tree for all HSub... objects.
+        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history);
+        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> resolvePath(HPath* path);
+        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> concatSubValue(std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> source, std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> target, bool interrupt);
+        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> resolvePrevValue(int counter, std::vector<std::string> path);
         /*
          * Note: to do substitutions, we need to keep an auxillary file keeping track of all object member additions and modifications
          * also, we need to give the substitution a handle on where to enter the file, if it is a self referential substitution.
          */
+
+        //substitution resolving helper methods
+
         //access methods:
         std::variant<HTree*, HArray*> getRoot();
         std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
