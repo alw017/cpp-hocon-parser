@@ -1459,6 +1459,11 @@ std::unordered_set<HSubstitution*> HParser::getUnresolvedSubs() {
     return std::visit(getSubstitutions, rootObject);
 }
 
+/*
+    Still need to implement proper optional substitution handling (in the case that they don't resolve)
+    implement resolving to environment variable in resolvePath();
+    do more testing. write more tests.
+*/
 std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history) {
     std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> concatValue;
     for (size_t i = 0; i < sub->values.size(); i++) {
