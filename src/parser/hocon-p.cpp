@@ -1528,7 +1528,12 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveS
             }
         }
     }
-    std::cout << "Final constructed value: \n" << std::visit(stringify, concatValue) << std::endl;
+    if (std::visit(valueExists, concatValue)) {
+        std::cout << "Final constructed value: \n" << std::visit(stringify, concatValue) << std::endl;
+    } else {
+        std::cout << "substitution did not contain any resolved values" << std::endl;
+    }
+
     set.erase(sub);
 }
 
@@ -1595,7 +1600,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::concatSu
 
 std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolvePrevValue(int counter, std::vector<std::string> path) {
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
-    for (auto it = stack.rend() - counter - 1; it != stack.rend(); it++) {
+    for (auto it = stack.rend() - counter; it != stack.rend(); it++) {
         if (path == it->first) {
             if (std::holds_alternative<HSubstitution*>(it->second)) {
                 out = it->second;
