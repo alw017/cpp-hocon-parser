@@ -467,6 +467,7 @@ HSimpleValue* HSimpleValue::deepCopy() {
 
 void HSimpleValue::concatSimpleValues(HSimpleValue* second) {
     defaultEnd = tokenParts.size() + second->defaultEnd;
+    //std::cout << "fusing [" << str() << "] and [" << second->str() << "]" << std::endl; 
     std::stringstream ss;
     for (auto t : second->tokenParts) {
         tokenParts.push_back(t);
@@ -1253,7 +1254,7 @@ HSimpleValue * HParser::hoconSimpleValue() {
         for (size_t i = 0; i < end + 1; i++) {
             ss << valTokens[i].lexeme;
         }
-        return new HSimpleValue(ss.str(), valTokens, end++); // end index is exclusive; 
+        return new HSimpleValue(ss.str(), valTokens, end+1); // end index is exclusive; 
     } else if (valTokens.size() == 1) { // parse normally
         return new HSimpleValue(valTokens.begin()->literal, valTokens, 1);
     } else {
@@ -1548,17 +1549,18 @@ void HParser::parseTokens() {
 
 void HParser::resolveSubstitutions() {
     std::unordered_set<HSubstitution*> subs = getUnresolvedSubs();
-    std::vector<std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*>> resolved; // temp
+    std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>> resolved; // temp
     while ( !subs.empty() ) { // temporary loop for testing resolveSub();
         HSubstitution* curr = *subs.begin();
         // destroy HSubstitution in root HTree structure at the original path.
         
         // take the result from resolveSub and set that as the value referred to by the key. 
         // set parent values for the resolve sub object.
-        auto result = resolveSub(curr, subs, std::unordered_set<HSubstitution*>());
+        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> result = resolveSub(curr, subs, std::unordered_set<HSubstitution*>());
         if (std::visit(valueExists, result)) {
             std::variant<std::string> keyStr = curr->key;
             std::visit(linkResolvedSub, curr->parent, keyStr, result);
+            //pushStack(curr->getPath(), result);
         } else {
             std::variant<std::string> keyStr = curr->key;
             HTree * debugPar = std::get<HTree*>(curr->parent);
@@ -1594,7 +1596,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                 res = new HSimpleValue(envVar, std::vector<Token>{Token(UNQUOTED_STRING, envVar, envVar, 0)}, 1);
             }
             if (std::visit(valueExists, res)) {
-                //std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to" << std::visit(stringify, res) << std::endl;
+                std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to \"" << std::visit(stringify, res) << "\""<< std::endl;
                 if (std::holds_alternative<HSubstitution*>(res)) {
                     HSubstitution * nextRes = std::get<HSubstitution*>(res);
                     if (history.count(nextRes)) {
@@ -1604,6 +1606,14 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                         history.insert(sub);
                         res = resolveSub(nextRes, set, history);
                     }
+
+                }
+                if (std::holds_alternative<HSimpleValue*>(res)) { // delete existing trailing path whitespace and add the current path's interrim whitespace to the resolved Value.
+                    HSimpleValue * curr = std::get<HSimpleValue*>(res);
+                    for (size_t i = curr->tokenParts.size() -1; i >= curr->defaultEnd; i--) {
+                        curr->tokenParts.pop_back();
+                    }
+                    curr->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0));
                 }
                 //return res;
             } else if (path->optional) { // try to resolve to a previously defined value, otherwise do not add the value
@@ -1681,7 +1691,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
                         temp->tokenParts.pop_back();
                     }
                     // add new whitespace stored in HPath;
-                    temp->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0)); // might not be correct formatting for whitespace tokens.
+                    if (path->suffixWhitespace != "") temp->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0)); // might not be correct formatting for whitespace tokens.
                 }
             }
             return out;
