@@ -5,11 +5,16 @@ const std::string INDENT = "    ";
 bool debug = false;
 
 std::string pathToString(std::vector<std::string> path) {
-    std::string out = path.size() > 0 ? "\"" + path[0] + "\"" : "";
+    std::string out = path.size() > 0 ? path[0] : "";
     for(size_t i = 1; i < path.size(); i++) {
-        out += ".\"" + path[i] + "\"";
+        out += "." + path[i];
     }
     return out;
+}
+
+std::string getEnvVar( std::string const & key ) {
+    char * val = std::getenv( key.c_str() );
+    return val == NULL ? std::string("") : std::string(val);
 }
 
 template<typename ... Ts>                                                 
@@ -200,6 +205,7 @@ void HTree::removeMember(std::string key) {
     for (auto iter = memberOrder.begin(); iter != memberOrder.end(); iter++) {
         if (*iter == key) {
             memberOrder.erase(iter);
+            break;
         }
     }
 }
@@ -494,7 +500,7 @@ std::string HPath::str() {
         }
     }
     out += "}";
-    if(parent){
+    if(debug && parent){
         out += " - path: " + pathToString(parent->getPath());
     }
     return out;
@@ -590,9 +596,12 @@ std::string HSubstitution::str() {
         }
     }
     //out += " stack counter = " + std::to_string(counter);
-    out += "interrupts: ";
-    for(auto b : interrupts) {
-        out += b ? "true " : "false "; 
+    
+    if(debug) {
+        out += "interrupts: ";
+        for(auto b : interrupts) {
+            out += b ? "true " : "false "; 
+        }
     }
     return out;
 }
@@ -1579,8 +1588,13 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
         if (std::holds_alternative<HPath*>(value)) {
             HPath * path = std::get<HPath*>(value);
             std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> res = resolvePath(path);
+            std::string envVar = getEnvVar(pathToString(path->path));
+            //std::cout << "getEnv returned: \"" << envVar << "\" for the input " << pathToString(path->path) << std::endl;
+            if (envVar != "" && !std::visit(valueExists, res)) {
+                res = new HSimpleValue(envVar, std::vector<Token>{Token(UNQUOTED_STRING, envVar, envVar, 0)}, 1);
+            }
             if (std::visit(valueExists, res)) {
-                std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to" << std::visit(stringify, res) << std::endl;
+                //std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to" << std::visit(stringify, res) << std::endl;
                 if (std::holds_alternative<HSubstitution*>(res)) {
                     HSubstitution * nextRes = std::get<HSubstitution*>(res);
                     if (history.count(nextRes)) {
@@ -1636,10 +1650,12 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
             }
         }
     }
-    if (std::visit(valueExists, concatValue)) {
-        std::cout << "Final constructed value: \n" << std::visit(stringify, concatValue) << std::endl;
-    } else {
-        std::cout << "substitution did not contain any resolved values" << std::endl;
+    if (debug) {
+        if (std::visit(valueExists, concatValue)) {
+            std::cout << "Final constructed value: \n" << std::visit(stringify, concatValue) << std::endl;
+        } else {
+            std::cout << "substitution did not contain any resolved values" << std::endl;
+        }
     }
 
     set.erase(sub);

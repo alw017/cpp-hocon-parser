@@ -90,10 +90,6 @@ void ConfigFile::runFile() {
     }
     if(std::holds_alternative<HTree*>(parser.rootObject)) {
         HTree* p = std::get<HTree*>(parser.rootObject);
-        for (auto pair : p->members) {
-            std::cout << pair.first << std::endl;
-            //std::cout << std::get<HSimpleValue*> (pair.second)->svalue.index() << std::endl;
-        }
         std::cout << "Root Object String: \n" << p->str() << std::endl;
         HTree * deepCopy = p->deepCopy();
         //std::cout << "Deep Copy Object String: \n" << deepCopy->str() << std::endl;
@@ -103,8 +99,8 @@ void ConfigFile::runFile() {
         std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
 
-    parser.getStack();
-    
+    //parser.getStack();
+    /*
     std::unordered_set<HSubstitution*> unresolvedSubs = parser.getUnresolvedSubs();
 
     for (auto sub : unresolvedSubs) {
@@ -115,7 +111,7 @@ void ConfigFile::runFile() {
         std::cout << sub->str();
         std::cout << ((sub->paths.size() > 1) ? ", with handles " : ", with handle ") << handles << std::endl;
     }
-    
+    */
     parser.resolveSubstitutions();
     std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
 
