@@ -69,11 +69,54 @@ auto getSubstitutions = Overload {
     [](HSubstitution * sub) { return std::unordered_set<HSubstitution*>{sub}; }
 };
 
+auto linkResolvedSub = Overload {
+    [](HTree * obj, std::string key, HTree* result) { 
+        obj->members[key] = result; 
+        },
+    [](HTree * obj, std::string key, HArray* result) { 
+        obj->members[key] = result; 
+        },
+    [](HTree * obj, std::string key, HSimpleValue* result) { 
+        obj->members[key] = result; 
+        },
+    [](HTree * obj, std::string key, HSubstitution* result) { 
+        obj->members[key] = result; 
+        },
+    [](HArray * arr, std::string key, HTree* result) { 
+        arr->elements[std::stoi(key)] = result; 
+        },
+    [](HArray * arr, std::string key, HArray* result) { 
+        arr->elements[std::stoi(key)] = result; 
+        },
+    [](HArray * arr, std::string key, HSimpleValue* result) { 
+        arr->elements[std::stoi(key)] = result; 
+        },
+    [](HArray * arr, std::string key, HSubstitution* result) { 
+        arr->elements[std::stoi(key)] = result; 
+        },
+};
+
+auto deleteNullSub = Overload {
+    [](HTree * obj, std::string key) {
+        obj->removeMember(key);
+    },
+    [](HArray* arr, std::string key) {
+        arr->removeElementAtIndex(std::stoi(key));
+    },
+};
+
 auto valueExists = Overload {
     [](HTree * obj) { return obj != NULL; },
     [](HArray * arr) { return arr != NULL; },
     [](HSimpleValue * val) { return val != NULL; },
     [](HSubstitution * sub) { return sub != NULL; }
+};
+
+auto HArrayDecrementIndex = Overload {
+    [](HTree * obj) { obj->key = std::to_string(std::stoi(obj->key) - 1); },
+    [](HArray * arr) { arr->key = std::to_string(std::stoi(arr->key) - 1); },
+    [](HSimpleValue * val) { val->key = std::to_string(std::stoi(val->key) - 1); },
+    [](HSubstitution * sub) { sub->key = std::to_string(std::stoi(sub->key) - 1); }
 };
 
 HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>>()) {}
@@ -150,6 +193,15 @@ bool HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
 
 bool HTree::memberExists(std::string key) {
     return members.count(key) != 0;
+}
+
+void HTree::removeMember(std::string key) {
+    members.erase(key);
+    for (auto iter = memberOrder.begin(); iter != memberOrder.end(); iter++) {
+        if (*iter == key) {
+            memberOrder.erase(iter);
+        }
+    }
 }
 
 HTree * HTree::deepCopy() {
@@ -347,6 +399,15 @@ void HArray::addElement(std::variant<HTree*, HArray*, HSimpleValue*, HSubstituti
     elements.push_back(val);
 }
 
+void HArray::removeElementAtIndex(size_t index) {
+    // re-set all values of index keys to their proper value.
+    for (size_t i = index + 1; i < elements.size(); i++) {
+        std::visit(HArrayDecrementIndex, elements[i]);
+    }
+    elements.erase(elements.begin() + index);
+    // remove the element at index.
+}
+
 /*
     concatenate two arrays, appending elements of second onto the first, preserving original order.
     deletes second after finishing.
@@ -367,15 +428,15 @@ std::unordered_set<HSubstitution*> HArray::getUnresolvedSubs() {
     return out;
 }
 
-HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts): svalue(s), tokenParts(tokenParts) {}
+HSimpleValue::HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts, size_t end): svalue(s), tokenParts(tokenParts), defaultEnd(end) {}
 
 std::string HSimpleValue::str() {
     std::string output;
     if (std::holds_alternative<std::string>(svalue)) {
         output = (std::get<std::string>(svalue)[0] == '"') ? std::get<std::string>(svalue) : "\"" + std::get<std::string>(svalue) + "\"";
     } else {
-        for (auto t : tokenParts) {
-            output += t.lexeme;
+        for (size_t i = 0; i < defaultEnd; i++) {
+            output += tokenParts[i].lexeme;
         }
     }
     if (debug) {
@@ -395,11 +456,20 @@ std::vector<std::string> HSimpleValue::getPath() {
 }
 
 HSimpleValue* HSimpleValue::deepCopy() {
-    return new HSimpleValue(svalue, tokenParts);
+    return new HSimpleValue(svalue, tokenParts, defaultEnd);
 }
 
 void HSimpleValue::concatSimpleValues(HSimpleValue* second) {
-    
+    defaultEnd = tokenParts.size() + second->defaultEnd;
+    std::stringstream ss;
+    for (auto t : second->tokenParts) {
+        tokenParts.push_back(t);
+    }
+    for (size_t i = 0; i < defaultEnd; i++) {
+        ss << tokenParts[i].lexeme;
+    }
+    svalue = ss.str();
+    delete second;
 }
 
 HPath::HPath(std::vector<std::string> s, bool optional) : path(s), optional(optional) {}
@@ -434,6 +504,7 @@ HPath * HPath::deepCopy() {
     HPath * out = new HPath(path, optional);
     out->counter = this->counter;
     out->parent = this->parent;
+    out->suffixWhitespace = this->suffixWhitespace;
     return out;
 }
 
@@ -1162,20 +1233,23 @@ HSimpleValue * HParser::hoconSimpleValue() {
     }
     if (valTokens.size() > 1) { // value concat, parse as string
         std::stringstream ss {""};
+        size_t end = valTokens.size() - 1;
         if (!check(SUB) && !check(SUB_OPTIONAL)) {
-            while ((valTokens.end() - 1)->type == WHITESPACE) {
-                valTokens.pop_back();
+            auto iter = valTokens.rbegin();
+            while (iter->type == WHITESPACE) {
+                end--;
+                iter++;
             }
         }
-        for (auto t : valTokens) {
-            ss << t.lexeme;
+        for (size_t i = 0; i < end + 1; i++) {
+            ss << valTokens[i].lexeme;
         }
-        return new HSimpleValue(ss.str(), valTokens);
+        return new HSimpleValue(ss.str(), valTokens, end++); // end index is exclusive; 
     } else if (valTokens.size() == 1) { // parse normally
-        return new HSimpleValue(valTokens.begin()->literal, valTokens);
+        return new HSimpleValue(valTokens.begin()->literal, valTokens, 1);
     } else {
         error(peek().line, "Expected a value, got nothing");
-        return new HSimpleValue(0, valTokens);
+        return new HSimpleValue(0, valTokens, 0);
     }
 }
 
@@ -1467,7 +1541,25 @@ void HParser::resolveSubstitutions() {
     std::unordered_set<HSubstitution*> subs = getUnresolvedSubs();
     std::vector<std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*>> resolved; // temp
     while ( !subs.empty() ) { // temporary loop for testing resolveSub();
-        resolved.push_back(resolveSub(*subs.begin(), subs, std::unordered_set<HSubstitution*>()));
+        HSubstitution* curr = *subs.begin();
+        // destroy HSubstitution in root HTree structure at the original path.
+        
+        // take the result from resolveSub and set that as the value referred to by the key. 
+        // set parent values for the resolve sub object.
+        auto result = resolveSub(curr, subs, std::unordered_set<HSubstitution*>());
+        if (std::visit(valueExists, result)) {
+            std::variant<std::string> keyStr = curr->key;
+            std::visit(linkResolvedSub, curr->parent, keyStr, result);
+        } else {
+            std::variant<std::string> keyStr = curr->key;
+            HTree * debugPar = std::get<HTree*>(curr->parent);
+            std::visit(deleteNullSub, curr->parent, keyStr);
+        }
+        delete curr;
+        //resolved.push_back(result);
+    }
+    for (auto res : resolved) {
+        std::visit(deleteHObj, res);
     }
 }
 
@@ -1480,8 +1572,8 @@ std::unordered_set<HSubstitution*> HParser::getUnresolvedSubs() {
     implement resolving to environment variable in resolvePath();
     do more testing. write more tests.
 */
-std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history) {
-    std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> concatValue;
+std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history) {
+    std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> concatValue;
     for (size_t i = 0; i < sub->values.size(); i++) {
         std::variant<HTree *, HArray *, HSimpleValue*, HPath*> value = sub->values[i];
         if (std::holds_alternative<HPath*>(value)) {
@@ -1511,7 +1603,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveS
                             history.insert(sub);
                             res = resolveSub(nextRes, set, history);
                         }
-                    } 
+                    }
                 } else {
                     continue; // skip concatenation if the value doesn't exist.
                 }
@@ -1551,6 +1643,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveS
     }
 
     set.erase(sub);
+    return concatValue;
 }
 
 std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePath(HPath* path) {
@@ -1565,6 +1658,15 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
                 out = it->second;
             } else {
                 out = std::visit(getDeepCopy, it->second);
+                if (std::holds_alternative<HSimpleValue*>(out)) { // string processing for simple value case.
+                    HSimpleValue * temp = std::get<HSimpleValue*>(out);
+                    // disregard old trailing whitespace after defaultEnd
+                    for (size_t i = temp->tokenParts.size() -1; i >= temp->defaultEnd; i--) {
+                        temp->tokenParts.pop_back();
+                    }
+                    // add new whitespace stored in HPath;
+                    temp->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0)); // might not be correct formatting for whitespace tokens.
+                }
             }
             return out;
         }
@@ -1606,11 +1708,11 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::concatSu
             }
             break;
         case 2:
-            if (true) { // changeto interrupt later.
+            if (interrupt) { // changeto interrupt later.
                 std::visit(deleteHObj, source);
                 return target;
             } else {
-                // concat simplevalues. save for later.
+                std::get<HSimpleValue*>(source)->concatSimpleValues(std::get<HSimpleValue*>(target));
                 return source;
             }
             break;

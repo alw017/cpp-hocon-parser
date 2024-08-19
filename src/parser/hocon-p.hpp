@@ -22,6 +22,7 @@ struct HTree {
     ~HTree();
     bool addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
     bool memberExists(std::string key);
+    void removeMember(std::string key);
     HTree * deepCopy();
     std::string str();
     std::vector<std::string> getPath();
@@ -40,6 +41,7 @@ struct HArray {
     //HArray(std::variant<HTree *, HArray *> parent);
     ~HArray();
     void addElement(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> val);
+    void removeElementAtIndex(size_t index);
     HArray * deepCopy();
     std::string str();
     std::vector<std::string> getPath();
@@ -53,7 +55,8 @@ struct HSimpleValue {
     std::variant<HTree *, HArray *> parent;
     std::vector<Token> tokenParts;
     std::string key = "";
-    HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts);
+    size_t defaultEnd;
+    HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts, size_t end);
     //HSimpleValue(std::variant<int, double, bool, std::string> s, std::vector<Token> tokenParts, std::variant<HTree*, HArray*> parent);
     std::string str();
     std::vector<std::string> getPath();
@@ -170,9 +173,7 @@ class HParser {
 
         //substitution resolving helper methods
 
-        //access methods:
-        std::variant<HTree*, HArray*> getRoot();
-        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
+        
 
 
         //error reporting
@@ -182,6 +183,9 @@ class HParser {
         bool run(); 
         HParser(std::vector<Token> tokens): tokenList(tokens), length(tokens.size()) {};
         ~HParser();
+        //access methods:
+        std::variant<HTree*, HArray*> getRoot();
+        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
 };
 
 

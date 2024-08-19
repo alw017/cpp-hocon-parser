@@ -21,7 +21,7 @@ bool ASSERT(std::string str, std::string expect) {
 
 HSimpleValue * debug_create_simple_string(std::string str) {
     Token t = Token(UNQUOTED_STRING, str, str, 0);
-    return new HSimpleValue(str, std::vector<Token>{t});
+    return new HSimpleValue(str, std::vector<Token>{t}, 0);
 }
 
 void test_parser_hoconKey() {
@@ -84,10 +84,10 @@ void test_parser_mergeTrees() {
     std::string s = "fooval1";
     std::string ov("bar overwrite");
     std::string ne("bar newvalue");
-    foo->addMember("key1", new HSimpleValue(s,std::vector<Token>{Token(UNQUOTED_STRING, s, s, 0)}));
+    foo->addMember("key1", new HSimpleValue(s,std::vector<Token>{Token(UNQUOTED_STRING, s, s, 0)}, 0));
     obj->addMember("foo", foo);
-    bar->addMember("key1", new HSimpleValue(ov,std::vector<Token>{Token(UNQUOTED_STRING, ov, ov, 0)}));
-    bar->addMember("key2", new HSimpleValue(ne,std::vector<Token>{Token(UNQUOTED_STRING, ne, ne, 0)}));
+    bar->addMember("key1", new HSimpleValue(ov,std::vector<Token>{Token(UNQUOTED_STRING, ov, ov, 0)}, 0));
+    bar->addMember("key2", new HSimpleValue(ne,std::vector<Token>{Token(UNQUOTED_STRING, ne, ne, 0)}, 0));
     obj->addMember("foo", bar);
     std::cout << "hoconMergeTrees() ran" << std::endl;
     delete obj;
@@ -96,16 +96,16 @@ void test_parser_mergeTrees() {
 void test_parser_concatArray() {
     HArray * root = new HArray();
     HArray * next = new HArray();
-    root->addElement(new HSimpleValue(10, std::vector<Token>{Token(NUMBER, "10", 10, 0)}));
+    root->addElement(new HSimpleValue(10, std::vector<Token>{Token(NUMBER, "10", 10, 0)}, 0));
     HTree * bar = new HTree();
     std::string ov("bar overwrite");
     std::string ne("bar newvalue");
-    bar->addMember("key1", new HSimpleValue(ov,std::vector<Token>{Token(UNQUOTED_STRING, ov, ov, 0)}));
-    bar->addMember("key2", new HSimpleValue(ne,std::vector<Token>{Token(UNQUOTED_STRING, ne, ne, 0)}));
+    bar->addMember("key1", new HSimpleValue(ov,std::vector<Token>{Token(UNQUOTED_STRING, ov, ov, 0)}, 0));
+    bar->addMember("key2", new HSimpleValue(ne,std::vector<Token>{Token(UNQUOTED_STRING, ne, ne, 0)}, 0));
     root->addElement(bar);
-    next->addElement(new HSimpleValue(1, std::vector<Token>{Token(NUMBER, "1", 1, 0)}));
-    next->addElement(new HSimpleValue(2, std::vector<Token>{Token(NUMBER, "2", 2, 0)}));
-    next->addElement(new HSimpleValue(ne,std::vector<Token>{Token(UNQUOTED_STRING, ne, ne, 0)}));
+    next->addElement(new HSimpleValue(1, std::vector<Token>{Token(NUMBER, "1", 1, 0)}, 0));
+    next->addElement(new HSimpleValue(2, std::vector<Token>{Token(NUMBER, "2", 2, 0)}, 0));
+    next->addElement(new HSimpleValue(ne,std::vector<Token>{Token(UNQUOTED_STRING, ne, ne, 0)}, 0));
     root->concatArrays(next);
     //std::cout << root->str() << std::endl;
     std::cout << "hoconConcatArray() ran" << std::endl;
@@ -188,7 +188,7 @@ void test_parser_substitution() {
     values.push_back(new HTree());
     values.push_back(new HArray());
     values.push_back(new HPath(std::vector<std::string>{"test", "path", "boo"}, false));
-    values.push_back(new HSimpleValue("unquotedstring", std::vector<Token>{Token(UNQUOTED_STRING, "unquotedstring", "unquotedstring", 0)}));
+    values.push_back(new HSimpleValue("unquotedstring", std::vector<Token>{Token(UNQUOTED_STRING, "unquotedstring", "unquotedstring", 0)}, 0));
     HSubstitution * sub = new HSubstitution(values);
     std::cout << sub->str() << std::endl;
     HTree * root = new HTree();

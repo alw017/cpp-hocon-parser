@@ -117,7 +117,7 @@ void ConfigFile::runFile() {
     }
     
     parser.resolveSubstitutions();
-    //std::cout << "Root Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
+    std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
 
     /*
     for (auto t : tree->members) {
