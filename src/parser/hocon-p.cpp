@@ -473,7 +473,8 @@ void HSimpleValue::concatSimpleValues(HSimpleValue* second) {
         tokenParts.push_back(t);
     }
     for (size_t i = 0; i < defaultEnd; i++) {
-        ss << tokenParts[i].lexeme;
+        std::cout << tokenParts[i].str() << std::endl;
+        ss << ((tokenParts[i].type == QUOTED_STRING) ? std::get<std::string>(tokenParts[i].literal) : tokenParts[i].lexeme);
     }
     svalue = ss.str();
     delete second;
@@ -521,8 +522,10 @@ HPath * HPath::deepCopy() {
 bool HPath::isSelfReference() {
     if (!parent) return false;
     std::vector<std::string> parentPath = parent->getPath();
+    std::cout << pathToString(path) << " and " << pathToString(parentPath) << std::endl;
     size_t indexMax = path.size() > parentPath.size() ? parentPath.size() : path.size(); 
-    for(size_t i = 0; i < path.size(); i++) {
+    std::cout << std::to_string(indexMax) << std::endl;
+    for(size_t i = 0; i < indexMax; i++) {
         if (parentPath[i] == path[i]) continue;
         else return false;
     }
@@ -1632,7 +1635,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                     continue; // skip concatenation if the value doesn't exist.
                 }
             } else {
-                error(0, "non-optional substitution failed to resolve");
+                error(0, "non-optional substitution with path \"" + pathToString(path->path) + "\" failed to resolve");
                 break;
                 //return new HSimpleValue("resolve failed", std::vector<Token>{Token(UNQUOTED_STRING, "resolve failed", "resolve failed", 0)});
             }
