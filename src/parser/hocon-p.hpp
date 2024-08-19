@@ -58,7 +58,7 @@ struct HSimpleValue {
     std::string str();
     std::vector<std::string> getPath();
     HSimpleValue * deepCopy();
-    //void concatSimpleValues(HSimpleValue* second);
+    void concatSimpleValues(HSimpleValue* second);
 };
 
 //struct HKey {

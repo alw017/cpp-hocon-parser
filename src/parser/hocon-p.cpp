@@ -398,6 +398,10 @@ HSimpleValue* HSimpleValue::deepCopy() {
     return new HSimpleValue(svalue, tokenParts);
 }
 
+void HSimpleValue::concatSimpleValues(HSimpleValue* second) {
+    
+}
+
 HPath::HPath(std::vector<std::string> s, bool optional) : path(s), optional(optional) {}
 
 HPath::HPath(Token t) {
@@ -1234,7 +1238,7 @@ HTree * HParser::findOrCreatePath(std::vector<std::string> path, HTree * parent)
 }
 
 /*
-    Takes a vector of tokens containing a key, and splits it into strings for each path section.
+    Takes a vector of tokens containing a path expression, and splits it into strings for each path section. allows for path segments with periods if they are quoted.
 */
 std::vector<std::string> HParser::splitPath(std::vector<Token> keyTokens) { 
     std::vector<std::string> path;
@@ -1270,6 +1274,9 @@ std::vector<std::string> HParser::splitPath(std::vector<Token> keyTokens) {
     return path;
 }
 
+/*
+    Helper method to split a string path delimited with "." into a vector of strings. allows for path segments with periods if they are quoted.
+*/
 std::vector<std::string> HParser::splitPath(std::string path) {
     size_t start = 0;
     size_t current = 0;
@@ -1294,6 +1301,9 @@ std::vector<std::string> HParser::splitPath(std::string path) {
     return out;
 } 
 
+/*
+    parses the next chain of adjacent arrays and their corresponding tokens, and returning the merged result. Adds the resulting elements to the stack history.
+*/
 HArray * HParser::concatAdjacentArrays() {
     HArray * curr = hoconArray();
     while (match(LEFT_BRACKET)) { // array concatenation here;
@@ -1302,6 +1312,9 @@ HArray * HParser::concatAdjacentArrays() {
     return curr;
 }
 
+/*
+    parses the next chain of adjacent objects and their corresponding tokens, and returning the merged result. Adds the resulting elements to the stack history.
+*/
 HTree * HParser::mergeAdjacentTrees(std::vector<std::string> path) {
     HTree * curr = hoconTree(path); // ends after consuming right brace.
     while (match(LEFT_BRACE)) { // obj concatenation here
@@ -1310,6 +1323,9 @@ HTree * HParser::mergeAdjacentTrees(std::vector<std::string> path) {
     return curr;
 }
 
+/*
+    parses the next chain of adjacent objects and their corresponding tokens, and returning the merged result. Does not add resulting elements to the stack history.
+*/
 HTree * HParser::mergeAdjacentArraySubTrees() {
     HTree * curr = hoconArraySubTree(); // ends after consuming right brace.
     while (match(LEFT_BRACE)) { // obj concatenation here
@@ -1558,10 +1574,16 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
 
 /*
     concatenates resolved values in a substitution. note that this function should never receive a substitution, and if it does, should notify an error.
+    target should never be a null pointer or else a segfault will occur.
 */
 std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::concatSubValue(std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> source, std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> target, bool interrupt) {
-    if (!std::visit(valueExists, source)) {
+    if (!std::visit(valueExists, source) && std::visit(valueExists, target)) {
         return target;
+    } else if (std::visit(valueExists, source) && !std::visit(valueExists, target)){
+        error(0, "error, concatSubValue encountered a null merge target");
+        return source;
+    } else if (!std::visit(valueExists, source) && !std::visit(valueExists, target)) {
+        error(0, "error, tried to merge two uninitialized values (null pointers) in concatSubValue()");
     }
     switch(target.index()) {
         case 0:
