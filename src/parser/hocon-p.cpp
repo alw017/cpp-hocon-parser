@@ -1451,21 +1451,7 @@ void HParser::resolveSubstitutions() {
     std::unordered_set<HSubstitution*> subs = getUnresolvedSubs();
     std::vector<std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*>> resolved; // temp
     while ( !subs.empty() ) { // temporary loop for testing resolveSub();
-        std::variant<HTree*, HArray*> parent = (*subs.begin())->parent;
-        std::string key = (*subs.begin())->key;
-        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> result = resolveSub(*subs.begin(), subs, std::unordered_set<HSubstitution*>());
-        if (std::visit(valueExists, result)) {
-            if(std::holds_alternative<HTree*>(parent)) {
-                HTree * p = std::get<HTree*>(parent);
-                std::visit(deleteHObj, p->members[key]);
-                p->members[key] = result;
-            }
-        } else {
-            if(std::holds_alternative<HTree*>(parent)) {
-                HTree * p = std::get<HTree*>(parent);
-                std::visit(deleteHObj, p->members[key]);
-            }
-        }
+        resolved.push_back(resolveSub(*subs.begin(), subs, std::unordered_set<HSubstitution*>()));
     }
 }
 
@@ -1474,7 +1460,7 @@ std::unordered_set<HSubstitution*> HParser::getUnresolvedSubs() {
 }
 
 /*
-    Still need to implement proper optional substitution handling (in the case that they don't resolve) -- might be fixed
+    Still need to implement proper optional substitution handling (in the case that they don't resolve)
     implement resolving to environment variable in resolvePath();
     do more testing. write more tests.
 */
@@ -1547,7 +1533,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveS
     } else {
         std::cout << "substitution did not contain any resolved values" << std::endl;
     }
-    return concatValue;
+
     set.erase(sub);
 }
 
