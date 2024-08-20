@@ -9,8 +9,8 @@
 
 class Lexer {
     public:
-        Lexer(std::string text, std::vector<Token>& list);
-        bool run();
+        Lexer(std::string text);
+        std::vector<Token> run();
     //private: temporary to dbug.
         int start = 0; //TODO Refactor to size_t later.
         int current = 0;
@@ -18,8 +18,9 @@ class Lexer {
         int length;
         bool hasError = false;
         std::string source;
-        std::vector<Token>& tokens;
+        std::vector<Token> tokens;
 
+        void setSource(std::string newSource);
         bool atEnd();
         void scanToken();
         void error(int line, std::string message);

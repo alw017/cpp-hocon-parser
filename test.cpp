@@ -26,8 +26,8 @@ HSimpleValue * debug_create_simple_string(std::string str) {
 
 void test_parser_hoconKey() {
     std::vector<Token> tokens = std::vector<Token>();
-    Lexer lexer = Lexer("test string 1 :", tokens);
-    lexer.run();
+    Lexer lexer = Lexer("test string 1 :");
+    tokens = lexer.run();
     HParser parser = HParser(tokens);
     std::string k = parser.hoconKey()[0];
     bool succeed = ASSERT_STRING(k, "test string 1");
@@ -40,8 +40,8 @@ void test_parser_hoconKey() {
 
 void test_parser_hoconSimpleValue() {
     std::vector<Token> tokens = std::vector<Token>();
-    Lexer lexer = Lexer("testvalue 214 true false m\n,", tokens);
-    lexer.run();
+    Lexer lexer = Lexer("testvalue 214 true false m\n,");
+    tokens = lexer.run();
     HParser parser = HParser(tokens);
     HSimpleValue * v = parser.hoconSimpleValue();
     HTree * root = new HTree();
@@ -57,15 +57,15 @@ void test_parser_hoconSimpleValue() {
 
 void test_parser_hoconTree_simpleValuesOnly() {
     std::vector<Token> tokens = std::vector<Token>();
-    Lexer lexer = Lexer("test {val: 1, obj {val = 2}}", tokens);
-    lexer.run();
+    Lexer lexer = Lexer("test {val: 1, obj {val = 2}}");
+    tokens = lexer.run();
     HParser parser = HParser(tokens);
 }
 
 void test_parser_hoconArray() {
     std::vector<Token> tokens = std::vector<Token>();
-    Lexer lexer = Lexer("val1, value 2, { val : 1 }, ]", tokens);
-    lexer.run();
+    Lexer lexer = Lexer("val1, value 2, { val : 1 }, ]");
+    tokens = lexer.run();
     HParser parser = HParser(tokens);
     HArray * arr = parser.hoconArray();
     bool succeed = true;
@@ -114,8 +114,8 @@ void test_parser_concatArray() {
 
 void test_parser_splitString(std::string target) {
     std::vector<Token> tokens;
-    Lexer lexer = Lexer(target, tokens);
-    lexer.run();
+    Lexer lexer = Lexer(target);
+    tokens = lexer.run();
     std::vector<std::string> out = HParser::splitPath(target);
     for(auto s : out) {
         std::cout << s << std::endl;
@@ -158,8 +158,8 @@ void test_parser_findCreate() {
     std::cout << "Before FindCreate: \n" << root->str() << std::endl;
     HParser parser = HParser(std::vector<Token>());
     std::vector<Token> tokens;
-    Lexer lexer = Lexer("foo.bar.baz", tokens);
-    lexer.run();
+    Lexer lexer = Lexer("foo.bar.baz");
+    tokens = lexer.run();
     std::vector<std::string> out = HParser::splitPath(tokens);
     for(auto s : out) {
         //std::cout << s << std::endl;
@@ -198,6 +198,17 @@ void test_parser_substitution() {
     delete root;
 }
 
+void test_parser_includeFile() {
+    std::vector<Token> tokens = std::vector<Token>();
+    Lexer lexer = Lexer("include requid(url(\"test\"))");
+    tokens = lexer.run();
+    HParser parser = HParser(tokens);
+    std::vector<std::string> out = parser.includeFile();
+    for (auto str : out) {
+        std::cout << str << std::endl;
+    }
+}
+
 void run_tests(){
     test_parser_hoconKey();
     test_parser_hoconSimpleValue();
@@ -213,6 +224,7 @@ int main() {
     std::cout << "starting tests" << std::endl;
     //run_tests();
     //test_parser_substitution();
-    test_parser_splitString("test.one.two.three.\"dont.split\".end");
+    //test_parser_splitString("test.one.two.three.\"dont.split\".end");
+    test_parser_includeFile();
 }
 

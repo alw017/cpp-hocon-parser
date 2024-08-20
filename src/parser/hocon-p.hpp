@@ -109,6 +109,7 @@ class HParser {
         int start = 0;      // refactor to size_t later.
         int current = 0;
         int length;
+        Lexer * lexer; 
 
         //look ahead/back
         Token peek();
@@ -144,6 +145,7 @@ class HParser {
         HSimpleValue * hoconSimpleValue();
         //std::vector<std::string> hoconKey();
         std::vector<std::string> hoconKey();
+        std::vector<std::string> includeFile();
 
         //helper methods for creating parsed objects
         HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
@@ -154,6 +156,7 @@ class HParser {
         HTree * mergeAdjacentArraySubTrees();
         HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
         HSubstitution * parseSubstitution();
+        bool isInclude(Token t);
         
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
         // ^ is automatically performed in hoconSimpleValue();

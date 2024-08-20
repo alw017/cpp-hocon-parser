@@ -66,9 +66,10 @@ ConfigFile::ConfigFile(char * filename) {
 
 void ConfigFile::runFile() {
     //cout << file << endl;
-    std::vector<Token> tokens = vector<Token>();
-    Lexer lexer = Lexer(file, tokens);
-    if (!lexer.run()) {
+    std::vector<Token> tokens;
+    Lexer lexer = Lexer(file);
+    tokens = lexer.run();
+    if (lexer.hasError) {
         std::cerr << "Lexer Error occurred. Terminating program." << endl;
         exit(1);
     }
@@ -76,6 +77,7 @@ void ConfigFile::runFile() {
     
 
     HParser parser = HParser(tokens);
+    parser.lexer = &lexer;
     parser.parseTokens();
     if (!parser.validConf) {
         std::cout << "Invalid Configu ration, Aborted" << std::endl;
@@ -99,7 +101,7 @@ void ConfigFile::runFile() {
         std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
 
-    //parser.getStack();
+    parser.getStack();
     /*
     std::unordered_set<HSubstitution*> unresolvedSubs = parser.getUnresolvedSubs();
 

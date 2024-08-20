@@ -1,9 +1,14 @@
 #include "lexer.hpp"
 
-Lexer::Lexer(std::string text, std::vector<Token>& list) : length(text.length()), source(text), tokens(list) {}
+Lexer::Lexer(std::string text) : length(text.length()), source(text) {}
 
 std::string Token::str() {
     return std::to_string(type) + " " + lexeme;
+}
+
+void Lexer::setSource(std::string newSource) {
+    source = newSource;
+    tokens.clear();
 }
 
 bool Lexer::atEnd() {
@@ -339,14 +344,14 @@ bool Lexer::isAlpha(char c) {
            (c >= 'A' && c <= 'Z');
 }
 
-bool Lexer::run() {
+std::vector<Token> Lexer::run() {
     while(!atEnd()) {
         start = current;
         scanToken();
     }
 
     tokens.push_back(Token(ENDFILE, "EOF", "", line));
-    return !hasError;
+    return tokens;
 }
 
 void Lexer::error(int line, std::string message) {
