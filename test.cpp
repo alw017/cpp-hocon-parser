@@ -203,10 +203,7 @@ void test_parser_includeFile() {
     Lexer lexer = Lexer("include requid(url(\"test\"))");
     tokens = lexer.run();
     HParser parser = HParser(tokens);
-    std::vector<std::string> out = parser.includeFile();
-    for (auto str : out) {
-        std::cout << str << std::endl;
-    }
+    std::tuple<std::string, IncludeType, bool> out = parser.hoconInclude();
 }
 
 void run_tests(){

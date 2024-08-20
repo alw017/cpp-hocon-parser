@@ -5,6 +5,11 @@
 #include <unordered_set>
 #include <memory>
 #include <tuple>
+#include <fstream>
+
+enum IncludeType {
+    URL, FILEPATH, CLASSPATH, HEURISTIC
+};
 
 struct HArray;
 struct HSimpleValue;
@@ -17,6 +22,7 @@ struct HTree {
     bool root = true;
     std::variant<HTree *, HArray *> parent;
     std::string key = "";
+    std::vector<std::string> includePrefix;
     HTree();
     //HTree(std::variant<HTree *, HArray *> parent);
     ~HTree();
@@ -143,9 +149,9 @@ class HParser {
         HArray * hoconArray();
         HTree * hoconArraySubTree();
         HSimpleValue * hoconSimpleValue();
-        //std::vector<std::string> hoconKey();
         std::vector<std::string> hoconKey();
-        std::vector<std::string> includeFile();
+        std::tuple<std::string, IncludeType, bool> hoconInclude();
+        HTree * parseInclude(std::vector<std::string> rootPath);
 
         //helper methods for creating parsed objects
         HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
@@ -157,6 +163,7 @@ class HParser {
         HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
         HSubstitution * parseSubstitution();
         bool isInclude(Token t);
+        std::string getFileText(std::string link, IncludeType type);
         
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
         // ^ is automatically performed in hoconSimpleValue();

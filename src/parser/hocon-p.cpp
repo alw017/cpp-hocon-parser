@@ -635,7 +635,7 @@ std::vector<std::string> HSubstitution::getPath() {
 
 
 HParser::~HParser() {
-    std::visit(deleteHObj, rootObject);
+    //std::visit(deleteHObj, rootObject);
     for(auto pair : stack) {
         std::visit(deleteHObj, pair.second);
     }
@@ -957,20 +957,29 @@ HTree * HParser::rootTree() {
 HTree * HParser::hoconTree(std::vector<std::string> parentPath) { 
     HTree * output = new HTree();
     HTree * target = output;
+    using std::get;
     while(!match(RIGHT_BRACE)) { // loop through members
         if(atEnd()) {
             error(peek().line, "Imbalanced {}");
             break;
         }
+        std::vector<std::string> rootPath = parentPath;
+        if (isInclude(peek())) {
+            HTree * includedTree = parseInclude(rootPath);
+            consumeToNextMember();
+            match(RIGHT_BRACE);
+            delete output;
+            return includedTree;
+        }
         std::vector<std::string> path = hoconKey(); 
         std::string keyValue = path[path.size()-1];
-        std::vector<std::string> rootPath = parentPath;
         rootPath.insert(std::end(rootPath), std::begin(path), std::end(path));
         if (path.size() > 1) {
             target = findOrCreatePath(path, output);
         } else {
             target = output;
         }
+        
         if (match(LEFT_BRACE)) {            // implied separator case. ex: foo {}
             HTree * obj = mergeAdjacentTrees(rootPath);
             if(check(SUB) || check(SUB_OPTIONAL)) {
@@ -1276,9 +1285,7 @@ std::vector<std::string> HParser::hoconKey() {
     ignoreAllWhitespace();
     std::vector<Token> keyTokens = std::vector<Token>();
     std::stringstream ss {""};
-    if (isInclude(peek())) {
-        return includeFile();
-    }
+    
     while(check(SIMPLE_VALUES) || check(WHITESPACE)) {
         keyTokens.push_back(advance());
     } // newline implies one of { : =, otherwise it's an error. left brace is implicit separator.
@@ -1299,65 +1306,90 @@ std::vector<std::string> HParser::hoconKey() {
 }
 
 /* 
-    Include file will consume and parse a sequence of include tokens, constructing a vector of strings identifying the file type
-    required status, and name.
+    Include file will consume and parse a sequence of include tokens, returning a tuple
+    of the link string, an IncludeType, and a boolean designating required status.
 */
-std::vector<std::string> HParser::includeFile() {
+std::tuple<std::string, IncludeType, bool> HParser::hoconInclude() {
     bool required = false;
-    std::string type;
-    std::vector<std::string> includeArgs;
-    includeArgs.push_back(advance().lexeme);
+    IncludeType type = HEURISTIC;
+    std::string link = "";
+    advance();
     match(WHITESPACE);
     if (check(QUOTED_STRING)) {
-        includeArgs.push_back(std::get<std::string>(advance().literal));
+        link = std::get<std::string>(advance().literal);
     } else if (check(UNQUOTED_STRING)) {
         if (peek().lexeme == "required") {
             required = true;
-            includeArgs.push_back(advance().lexeme);
+            advance();
             if (match(LEFT_PAREN)) {
                 match(WHITESPACE);
             } else {
                 error(peek().line, "expected '(', got " + peek().lexeme);
-                return std::vector<std::string>();
+                return std::make_tuple("", URL, false);
             }
         }
         if (peek().lexeme == "url") {
-            includeArgs.push_back("url");
+            type = URL;
         } else if (peek().lexeme == "file") {
-            includeArgs.push_back("file");
+            type = FILEPATH;
         } else if (peek().lexeme == "classpath") {
-            includeArgs.push_back("classPath");
+            type = CLASSPATH;
         } else {
             error(peek().line, "expected one of url, file, or classpath, got " + peek().lexeme);
-            return std::vector<std::string>();
+            return std::make_tuple("", URL, false);
         }
         
         advance(); // consume url/file/classpath
         if (match(LEFT_PAREN)) {
             match(WHITESPACE);
             if (check(QUOTED_STRING)) {
-                includeArgs.push_back(advance().lexeme);
+                link = std::get<std::string>(advance().literal);
                 if (!match(RIGHT_PAREN)) {
                     error(peek().line, "unterminated ()");
-                    return std::vector<std::string>();
+                    return std::make_tuple("", URL, false);
                 } 
             } else {
                 error(peek().line, "expected a quoted string, got " + peek().lexeme);
-                return std::vector<std::string>();
+                return std::make_tuple("", URL, false);
             }
         } else {
             error(peek().line, "expected '(', got " + peek().lexeme);
-            return std::vector<std::string>();
+            return std::make_tuple("", URL, false);
         }
         if (required && !match(RIGHT_PAREN)) {
             error(peek().line, "unterminated ()");
-            return std::vector<std::string>();
+            return std::make_tuple("", URL, false);
         }
     } else {
         error(peek().line, "expected a quoted string, or one of \"required\", \"url\", \"file\", \"classpath\", got " + peek().lexeme);
-        return std::vector<std::string>();
+        return std::make_tuple("", URL, false);
     }
-    return includeArgs;
+    return std::make_tuple(link, type, required);
+}
+
+HTree * HParser::parseInclude(std::vector<std::string> rootPath) {
+    std::string keyValue = rootPath[rootPath.size()-1];
+    std::tuple<std::string, IncludeType, bool> out = hoconInclude();
+    HTree * res;
+    if (std::get<0>(out) == "") {
+        return res;
+    } else {
+        std::string content = getFileText(std::get<0>(out), std::get<1>(out));
+        Lexer lexer = Lexer(content);
+        std::vector<Token> tokens = lexer.run();
+        HParser includeParser = HParser(tokens);
+        includeParser.parseTokens();
+        for (auto pair : includeParser.stack) {
+            std::vector<std::string> resolvedIncludePath = pair.first;
+            resolvedIncludePath.insert(resolvedIncludePath.begin(), rootPath.begin(), rootPath.end());
+            pushStack(resolvedIncludePath, pair.second);
+        }
+        res = std::get<HTree*>(includeParser.rootObject);
+        if (!res && !std::get<2>(out)) {
+            error(peek().line, "non optional include failed to evaluate.");
+        }
+        return res;
+    }
 }
 
 // helper methods for creating parsed objects
@@ -1594,6 +1626,31 @@ HSubstitution * HParser::parseSubstitution() {
 
 bool HParser::isInclude(Token t) {
     return (t.type == UNQUOTED_STRING && t.lexeme == "include");
+}
+
+std::string HParser::getFileText(std::string link, IncludeType type) {
+    std::ifstream includedFile;
+    std::string content;
+    switch (type) {
+        case URL:
+            break;
+        case FILEPATH:
+            includedFile = std::ifstream(link);
+            if (!includedFile.is_open()) {
+                std::cerr << "ERROR: File " << link << " failed to open." << std::endl;
+                exit(1);
+            } else {
+                std::ostringstream stream;
+                stream << includedFile.rdbuf();
+                content = stream.str();
+            }
+            break;
+        case CLASSPATH:
+            break;
+        case HEURISTIC:
+            break;
+    }
+    return content;
 }
 
 // parsing steps:
