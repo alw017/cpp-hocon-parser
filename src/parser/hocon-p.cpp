@@ -1333,10 +1333,8 @@ std::tuple<std::string, IncludeType, bool> HParser::hoconInclude() {
             type = URL;
         } else if (peek().lexeme == "file") {
             type = FILEPATH;
-        } else if (peek().lexeme == "classpath") {
-            type = CLASSPATH;
         } else {
-            error(peek().line, "expected one of url, file, or classpath, got " + peek().lexeme);
+            error(peek().line, "expected url or file, got " + peek().lexeme);
             return std::make_tuple("", URL, false);
         }
         
@@ -1362,7 +1360,7 @@ std::tuple<std::string, IncludeType, bool> HParser::hoconInclude() {
             return std::make_tuple("", URL, false);
         }
     } else {
-        error(peek().line, "expected a quoted string, or one of \"required\", \"url\", \"file\", \"classpath\", got " + peek().lexeme);
+        error(peek().line, "expected a quoted string, or one of \"required\", \"url\", or \"file\", got " + peek().lexeme);
         return std::make_tuple("", URL, false);
     }
     return std::make_tuple(link, type, required);
@@ -1638,11 +1636,30 @@ bool HParser::isInclude(Token t) {
     return (t.type == UNQUOTED_STRING && t.lexeme == "include");
 }
 
+// mini helper method for getFileText
+size_t write_to_string(void *ptr, size_t size, size_t count, void *stream) {
+  ((std::string*)stream)->append((char*)ptr, 0, size*count);
+  return size*count;
+}
+
 std::string HParser::getFileText(std::string link, IncludeType type) {
     std::ifstream includedFile;
     std::string content;
     switch (type) {
         case URL:
+            CURL *curl;
+            CURLcode result;
+
+            // Create our curl handle  
+            curl = curl_easy_init();  
+            curl_easy_setopt(curl, CURLOPT_URL, link.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_to_string);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content);
+
+            result = curl_easy_perform(curl);
+            if(result != CURLE_OK)
+            fprintf(stderr, "curl_easy_perform() failed: %s\n",
+                    curl_easy_strerror(result));
             break;
         case FILEPATH:
             includedFile = std::ifstream(link);
@@ -1654,8 +1671,6 @@ std::string HParser::getFileText(std::string link, IncludeType type) {
                 stream << includedFile.rdbuf();
                 content = stream.str();
             }
-            break;
-        case CLASSPATH:
             break;
         case HEURISTIC:
             break;

@@ -6,9 +6,10 @@
 #include <memory>
 #include <tuple>
 #include <fstream>
+#include <curl/curl.h>
 
 enum IncludeType {
-    URL, FILEPATH, CLASSPATH, HEURISTIC
+    URL, FILEPATH, HEURISTIC
 };
 
 struct HArray;

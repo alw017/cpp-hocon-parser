@@ -14,6 +14,9 @@ add_subdirectory(src)
 add_executable(main main.cpp)
 add_executable(test test.cpp)
 
+find_package( CURL REQUIRED )
+target_link_libraries( parser CURL::libcurl )
+
 target_link_libraries(reader lexer)
 target_link_libraries(parser lexer)
 target_link_libraries(reader parser)
