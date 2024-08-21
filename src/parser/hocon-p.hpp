@@ -22,9 +22,7 @@ struct HTree {
     bool root = true;
     std::variant<HTree *, HArray *> parent;
     std::string key = "";
-    std::vector<std::string> includePrefix;
     HTree();
-    //HTree(std::variant<HTree *, HArray *> parent);
     ~HTree();
     bool addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
     bool memberExists(std::string key);
@@ -91,6 +89,7 @@ struct HPath {
 
 struct HSubstitution {
     std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> values;
+    std::vector<std::string> includePrefix;
     std::vector<bool> interrupts;
     std::vector<HPath*> paths;
     std::variant<HTree*,HArray*> parent;

@@ -621,6 +621,7 @@ HSubstitution * HSubstitution::deepCopy() {
     copy->key = this->key;
     copy->interrupts = this->interrupts;
     copy->substitutionType = this->substitutionType;
+    copy->includePrefix = this->includePrefix;
     return copy;
 }
 
@@ -1379,12 +1380,21 @@ HTree * HParser::parseInclude(std::vector<std::string> rootPath) {
         std::vector<Token> tokens = lexer.run();
         HParser includeParser = HParser(tokens);
         includeParser.parseTokens();
+
+        // need to set includePrefix for both the stack and the tree because they are separate objects representing the same data.
+        // by the time that we set the data in the tree, the unset version of the object was already copied to the stack.
         for (auto pair : includeParser.stack) {
             std::vector<std::string> resolvedIncludePath = pair.first;
             resolvedIncludePath.insert(resolvedIncludePath.begin(), rootPath.begin(), rootPath.end());
+            if(std::holds_alternative<HSubstitution*>(pair.second)) {
+                std::get<HSubstitution*>(pair.second)->includePrefix = rootPath;
+            }
             pushStack(resolvedIncludePath, pair.second);
         }
         res = std::get<HTree*>(includeParser.rootObject);
+        for (HSubstitution * sub : res->getUnresolvedSubs()) {
+            sub->includePrefix = rootPath;
+        }
         if (!res && !std::get<2>(out)) {
             error(peek().line, "non optional include failed to evaluate.");
         }
@@ -1718,14 +1728,19 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
         std::variant<HTree *, HArray *, HSimpleValue*, HPath*> value = sub->values[i];
         if (std::holds_alternative<HPath*>(value)) {
             HPath * path = std::get<HPath*>(value);
+            std::vector<std::string> oldPath = path->path;
+            path->path.insert(path->path.begin(), sub->includePrefix.begin(), sub->includePrefix.end());
             std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> res = resolvePath(path);
+            if (!std::visit(valueExists, res) && !sub->includePrefix.empty()) {
+                path->path = oldPath;
+                res = resolvePath(path);
+            }
             std::string envVar = getEnvVar(pathToString(path->path));
-            //std::cout << "getEnv returned: \"" << envVar << "\" for the input " << pathToString(path->path) << std::endl;
-            if (envVar != "" && !std::visit(valueExists, res)) {
+            if (envVar != "" && !std::visit(valueExists, res)) { // if no path resolves, look in the environment variables.
                 res = new HSimpleValue(envVar, std::vector<Token>{Token(UNQUOTED_STRING, envVar, envVar, 0)}, 1);
             }
             if (std::visit(valueExists, res)) {
-                std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to \"" << std::visit(stringify, res) << "\""<< std::endl;
+                //std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to \"" << std::visit(stringify, res) << "\""<< std::endl;
                 if (std::holds_alternative<HSubstitution*>(res)) {
                     HSubstitution * nextRes = std::get<HSubstitution*>(res);
                     if (history.count(nextRes)) {
@@ -1735,8 +1750,8 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                         history.insert(sub);
                         res = resolveSub(nextRes, set, history);
                     }
-
                 }
+                // case where the path resolves to substitution which resolves in to a simple value
                 if (std::holds_alternative<HSimpleValue*>(res)) { // delete existing trailing path whitespace and add the current path's interrim whitespace to the resolved Value.
                     HSimpleValue * curr = std::get<HSimpleValue*>(res);
                     for (size_t i = curr->tokenParts.size() -1; i >= curr->defaultEnd; i--) {

@@ -116,7 +116,11 @@ void ConfigFile::runFile() {
     */
     parser.resolveSubstitutions();
     std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser.rootObject)->str() << std::endl;
-
+    if (std::holds_alternative<HTree*>(parser.rootObject)) {
+        delete std::get<HTree*>(parser.rootObject);
+    } else {
+        delete std::get<HArray*>(parser.rootObject);
+    }
     /*
     for (auto t : tree->members) {
             std::cout << t.first->key << " : " << std::endl;
