@@ -12,7 +12,7 @@ std::string pathToString(std::vector<std::string> path) {
     return out;
 }
 
-std::string getEnvVar( std::string const & key ) {
+std::string getEnvVar( std::string const& key ) {
     char * val = std::getenv( key.c_str() );
     return val == NULL ? std::string("") : std::string(val);
 }
@@ -75,37 +75,37 @@ auto getSubstitutions = Overload {
 };
 
 auto linkResolvedSub = Overload {
-    [](HTree * obj, std::string key, HTree* result) { 
+    [](HTree * obj, std::string const& key, HTree* result) { 
         obj->members[key] = result; 
         },
-    [](HTree * obj, std::string key, HArray* result) { 
+    [](HTree * obj, std::string const& key, HArray* result) { 
         obj->members[key] = result; 
         },
-    [](HTree * obj, std::string key, HSimpleValue* result) { 
+    [](HTree * obj, std::string const& key, HSimpleValue* result) { 
         obj->members[key] = result; 
         },
-    [](HTree * obj, std::string key, HSubstitution* result) { 
+    [](HTree * obj, std::string const& key, HSubstitution* result) { 
         obj->members[key] = result; 
         },
-    [](HArray * arr, std::string key, HTree* result) { 
+    [](HArray * arr, std::string const& key, HTree* result) { 
         arr->elements[std::stoi(key)] = result; 
         },
-    [](HArray * arr, std::string key, HArray* result) { 
+    [](HArray * arr, std::string const& key, HArray* result) { 
         arr->elements[std::stoi(key)] = result; 
         },
-    [](HArray * arr, std::string key, HSimpleValue* result) { 
+    [](HArray * arr, std::string const& key, HSimpleValue* result) { 
         arr->elements[std::stoi(key)] = result; 
         },
-    [](HArray * arr, std::string key, HSubstitution* result) { 
+    [](HArray * arr, std::string const& key, HSubstitution* result) { 
         arr->elements[std::stoi(key)] = result; 
         },
 };
 
 auto deleteNullSub = Overload {
-    [](HTree * obj, std::string key) {
+    [](HTree * obj, std::string const& key) {
         obj->removeMember(key);
     },
-    [](HArray* arr, std::string key) {
+    [](HArray* arr, std::string const& key) {
         arr->removeElementAtIndex(std::stoi(key));
     },
 };
@@ -132,7 +132,7 @@ HTree::~HTree() {
     }
 }
 
-bool HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value) {
+bool HTree::addMember(std::string const& key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value) {
     if(std::holds_alternative<HTree*>(value)) {
         HTree * obj = std::get<HTree*>(value);
         obj->parent = this;
@@ -196,11 +196,11 @@ bool HTree::addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValu
     return false;
 }
 
-bool HTree::memberExists(std::string key) {
+bool HTree::memberExists(std::string const& key) {
     return members.count(key) != 0;
 }
 
-void HTree::removeMember(std::string key) {
+void HTree::removeMember(std::string const& key) {
     members.erase(key);
     for (auto iter = memberOrder.begin(); iter != memberOrder.end(); iter++) {
         if (*iter == key) {
@@ -1469,7 +1469,7 @@ std::vector<std::string> HParser::splitPath(std::vector<Token> keyTokens) {
 /*
     Helper method to split a string path delimited with "." into a vector of strings. allows for path segments with periods if they are quoted.
 */
-std::vector<std::string> HParser::splitPath(std::string path) {
+std::vector<std::string> HParser::splitPath(std::string const& path) {
     size_t start = 0;
     size_t current = 0;
     std::vector<std::string> out;
@@ -1642,7 +1642,7 @@ size_t write_to_string(void *ptr, size_t size, size_t count, void *stream) {
   return size*count;
 }
 
-std::string HParser::getFileText(std::string link, IncludeType type) {
+std::string HParser::getFileText(std::string const& link, IncludeType type) {
     std::ifstream includedFile;
     std::string content;
     switch (type) {
@@ -1660,6 +1660,7 @@ std::string HParser::getFileText(std::string link, IncludeType type) {
             if(result != CURLE_OK)
             fprintf(stderr, "curl_easy_perform() failed: %s\n",
                     curl_easy_strerror(result));
+            curl_easy_cleanup(curl);
             break;
         case FILEPATH:
             includedFile = std::ifstream(link);
@@ -1924,7 +1925,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveP
     return out;
 }
 
-std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path); //change return type?
+std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string const& path); //change return type?
 
 // split string by delimiter helper. 
 
@@ -1932,12 +1933,12 @@ std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path); //chan
 
 // error reporting:
 
-void HParser::error(int line, std::string message) {
+void HParser::error(int line, std::string const& message) {
     report(line, "", message);
     validConf = false;
 }
 
-void HParser::report(int line, std::string where, std::string message) {
+void HParser::report(int line, std::string const& where, std::string const& message) {
     std::cerr << "[line " << line << "] Error" << where << ": " << message << std::endl;
 }
 

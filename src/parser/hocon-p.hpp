@@ -25,9 +25,9 @@ struct HTree {
     std::string key = "";
     HTree();
     ~HTree();
-    bool addMember(std::string key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
-    bool memberExists(std::string key);
-    void removeMember(std::string key);
+    bool addMember(std::string const& key, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> value);
+    bool memberExists(std::string const& key);
+    void removeMember(std::string const& key);
     HTree * deepCopy();
     std::string str();
     std::vector<std::string> getPath();
@@ -156,14 +156,14 @@ class HParser {
         //helper methods for creating parsed objects
         HTree * findOrCreatePath(std::vector<std::string> path, HTree * parent);
         static std::vector<std::string> splitPath(std::vector<Token> keyTokens);
-        static std::vector<std::string> splitPath(std::string path);
+        static std::vector<std::string> splitPath(std::string const& path);
         HArray * concatAdjacentArrays();
         HTree * mergeAdjacentTrees(std::vector<std::string> parentPath);
         HTree * mergeAdjacentArraySubTrees();
         HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
         HSubstitution * parseSubstitution();
         bool isInclude(Token t);
-        std::string getFileText(std::string link, IncludeType type);
+        std::string getFileText(std::string const& link, IncludeType type);
         
         //HSimpleValue * concatSimpleValues(HSimpleValue * first, HSimpleValue * second);
         // ^ is automatically performed in hoconSimpleValue();
@@ -187,15 +187,15 @@ class HParser {
 
 
         //error reporting
-        void error(int line, std::string message);
-        void report(int line, std::string where, std::string message);
+        void error(int line, std::string const& message);
+        void report(int line, std::string const& where, std::string const& message);
     public:
         bool run(); 
         HParser(std::vector<Token> tokens): tokenList(tokens), length(tokens.size()) {};
         ~HParser();
         //access methods:
         std::variant<HTree*, HArray*> getRoot();
-        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string path);
+        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string const& path);
 };
 
 
