@@ -172,19 +172,17 @@ class HParser {
         void parseTokens(); // first pass, creating AST and merging whenever possible.
         void resolveSubstitutions(); // second pass, resolving substitutions and resolving the remaining merges dependent on substitutions.
         std::unordered_set<HSubstitution*> getUnresolvedSubs(); // helpermethod for resolveSubstitutions that traverses the root tree for all HSub... objects.
-        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history);
-        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> resolvePath(HPath* path);
-        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> concatSubValue(std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> source, std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> target, bool interrupt);
-        std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> resolvePrevValue(int counter, std::vector<std::string> path);
+        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history);
+        void resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> obj, std::unordered_set<HSubstitution*> history);
+        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePath(HPath* path);
+        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> concatSubValue(std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> source, std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> target, bool interrupt);
+        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePrevValue(int counter, std::vector<std::string> path);
         /*
          * Note: to do substitutions, we need to keep an auxillary file keeping track of all object member additions and modifications
          * also, we need to give the substitution a handle on where to enter the file, if it is a self referential substitution.
          */
 
         //substitution resolving helper methods
-
-        
-
 
         //error reporting
         void error(int line, std::string const& message);
@@ -195,7 +193,8 @@ class HParser {
         ~HParser();
         //access methods:
         std::variant<HTree*, HArray*> getRoot();
-        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::string const& path);
+        std::variant<HTree*, HArray*, HSimpleValue*> getByPath(std::vector<std::string> const& path);
+        std::string getValueString(std::string const& path);
 };
 
 

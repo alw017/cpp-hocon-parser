@@ -5,18 +5,16 @@
 #include <string>
 #include <sstream>
 #include <lexer.hpp>
-#include <parser.hpp>
+#include <hocon-p.hpp>
+#include <vector>
+
 
 class ConfigFile {
     private:
         std::string file;
-        ASTMapObject * obj_tree;
     public:
         ConfigFile(char * filename);
-        //~ConfigFile();
-
-        ASTValue * getByPath(ASTMapObject * root, std::string path);
-        
+        //~ConfigFile();        
         void runFile(); // void for now but later it will return a map of relevant key/value pairs.
 };
 
