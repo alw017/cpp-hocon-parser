@@ -1885,6 +1885,7 @@ void HParser::resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitut
             std::get<HArray*>(obj)->elements[std::stoi(sub->key)] = resolveSub(sub, dummy, history);
         }
         history.erase(sub);
+        delete sub;
     }
 }
 

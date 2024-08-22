@@ -116,12 +116,12 @@ void Lexer::unquotedString(char c) {
         std::string s = ss.str();
         //std::cout << "string is: '" << s << "' on line" << std::to_string(line) << std::endl;
         if (s == "true") {
-            addToken(TRUE);
+            addToken(TRUE, true);
             return;
         } else if (s == "false") {
-            addToken(FALSE);
+            addToken(FALSE, false);
             return;
-        } else if (s == "null") {
+        } else if (s == "null", 0) {
             addToken(NULLVALUE);
             return;
         }

@@ -12,9 +12,14 @@
 class ConfigFile {
     private:
         std::string file;
+        HParser * parserPtr;
     public:
         ConfigFile(char * filename);
-        //~ConfigFile();        
+        ~ConfigFile();        
         void runFile(); // void for now but later it will return a map of relevant key/value pairs.
+        std::string getStringByPath(std::string const& str);
+        bool getBoolByPath(std::string const& str);
+        double getDoubleByPath(std::string const& str);
+        int getIntByPath(std::string const& str);
 };
 
