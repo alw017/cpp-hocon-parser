@@ -215,6 +215,9 @@ HTree * HTree::deepCopy() {
     for (auto pair : members) {
         copy->addMember(pair.first, std::visit(getDeepCopy, pair.second));
     }
+    copy->parent = this->parent;
+    copy->key = this->key;
+    copy->root = this->root;
     return copy;
 } 
 
@@ -522,7 +525,10 @@ HPath * HPath::deepCopy() {
 bool HPath::isSelfReference() {
     if (!parent) return false;
     std::vector<std::string> parentPath = parent->getPath();
-    //std::cout << pathToString(path) << " and " << pathToString(parentPath) << std::endl;
+    std::stringstream ss{""}; 
+    ss << pathToString(path) << " and " << pathToString(parentPath);
+    std::string res = ss.str();
+    std::cout << res << std::endl;
     size_t indexMax = path.size() > parentPath.size() ? parentPath.size() : path.size(); 
     //std::cout << std::to_string(indexMax) << std::endl;
     for(size_t i = 0; i < indexMax; i++) {
@@ -697,6 +703,7 @@ void HParser::getStack() {
 void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value) {
     if(std::holds_alternative<HSubstitution*>(value)) {
         HSubstitution* sub = std::get<HSubstitution*>(value); 
+        HTree * handle = std::get<HTree*>(sub->parent);
         for(auto val : sub->values) { 
             if (std::holds_alternative<HPath*>(val)) {
                 HPath* hpath = std::get<HPath*>(val);
@@ -705,7 +712,12 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
         }
         //unresolvedSubs.push_back(sub->deepCopy());
     }
-    stack.push_back(std::make_pair(path, std::visit(getDeepCopy, value))); // leave it for now, a potential fix if this causes memory issues is creating a new tree that points to earlier copies in the stack, instead of creating a new deep copy.
+    std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> temp = std::visit(getDeepCopy, value);
+    HSubstitution * handle;
+    if (std::holds_alternative<HSubstitution*>(temp)) {
+        handle = std::get<HSubstitution*>(temp);
+    }
+    stack.push_back(std::make_pair(path, temp)); // leave it for now, a potential fix if this causes memory issues is creating a new tree that points to earlier copies in the stack, instead of creating a new deep copy.
 }
 
 // consume helper methods
@@ -1763,6 +1775,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
     std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> concatValue;
     for (size_t i = 0; i < sub->values.size(); i++) {
         std::variant<HTree *, HArray *, HSimpleValue*, HPath*> value = sub->values[i];
+        std::string debug = std::visit(stringify, value);
         if (std::holds_alternative<HPath*>(value)) {
             HPath * path = std::get<HPath*>(value);
             std::vector<std::string> oldPath = path->path;
@@ -1791,6 +1804,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
 
                 std::unordered_set<HSubstitution*> subs = std::visit(getSubstitutions, res);
                 if (!subs.empty()) {
+                    HTree * t = std::get<HTree*>(res);
                     resolveObj(res, history);
                 }
                 // case where the path resolves to substitution which resolves in to a simple value
