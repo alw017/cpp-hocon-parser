@@ -21,5 +21,6 @@ class ConfigFile {
         bool getBoolByPath(std::string const& str);
         double getDoubleByPath(std::string const& str);
         int getIntByPath(std::string const& str);
+        bool pathExists(std::string const& str);
 };
 

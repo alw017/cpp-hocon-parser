@@ -240,7 +240,8 @@ std::string HTree::str() {
         }
     }
     
-    for(std::string keyval : memberOrder) {
+    for(size_t i = 0; i < memberOrder.size(); i++) {
+        std::string keyval = memberOrder[i];
         auto value = members[keyval];
         out += INDENT + keyval + " : ";
         if (std::holds_alternative<HTree*>(value)) {
@@ -251,7 +252,7 @@ std::string HTree::str() {
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += word == "}" ? INDENT + word + ",\n" : INDENT + word + "\n";
+                out += (word == "}" && i != memberOrder.size()-1) ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else if (std::holds_alternative<HArray*>(value)) {
             std::string string = std::get<HArray*>(value)->str();
@@ -261,10 +262,10 @@ std::string HTree::str() {
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += word == "]" ? INDENT + word + ",\n" : INDENT + word + "\n";
+                out += (word == "]" && i != memberOrder.size()-1) ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else {
-            out += std::visit(stringify, value) + "\n";
+            out += std::visit(stringify, value) + ((i != memberOrder.size()-1) ? ",\n" : "\n");
         }
     }
     out += "}";
@@ -345,7 +346,8 @@ std::string HArray::str() { // tested,
         }
     }
 
-    for(auto e : elements) {
+    for(size_t i = 0; i < elements.size(); i++) {
+        auto e = elements[i];
         out += INDENT;
         if (std::holds_alternative<HTree*>(e)) {
             std::string string = std::get<HTree*>(e)->str();
@@ -355,7 +357,7 @@ std::string HArray::str() { // tested,
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += word == "}" ? INDENT + word + ",\n" : INDENT + word + "\n";
+                out += (word == "}" && i != elements.size()-1) ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else if (std::holds_alternative<HArray*>(e)) {
             std::string string = std::get<HArray*>(e)->str();
@@ -365,10 +367,10 @@ std::string HArray::str() { // tested,
             out += word + "\n";
             while (!ss.eof()) {
                 std::getline(ss, word, '\n');
-                out += word == "]" ? INDENT + word + ",\n" : INDENT + word + "\n";
+                out += (word == "]" && i != elements.size()-1) ? INDENT + word + ",\n" : INDENT + word + "\n";
             }
         } else {
-            out += std::visit(stringify, e) + ",\n";
+            out += std::visit(stringify, e) + ((i != elements.size()-1) ? ",\n" : "\n");
         }
     }
     out += "]";
@@ -504,7 +506,7 @@ std::string HPath::str() {
             out += "." + *iter;
         }
     }
-    out += "}" + std::to_string(counter) + (isSelfReference()?" self":" root");
+    out += "}";// + std::to_string(counter) + (isSelfReference()?" self":" root");
     if(debug && parent){
         out += " - path: " + pathToString(parent->getPath());
     }
@@ -528,7 +530,7 @@ bool HPath::isSelfReference() {
     std::stringstream ss{""}; 
     ss << pathToString(path) << " and " << pathToString(parentPath);
     std::string res = ss.str();
-    std::cout << res << std::endl;
+    //std::cout << res << std::endl;
     size_t indexMax = path.size() > parentPath.size() ? parentPath.size() : path.size(); 
     //std::cout << std::to_string(indexMax) << std::endl;
     for(size_t i = 0; i < indexMax; i++) {
@@ -1074,6 +1076,26 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                 }
             }
             consumeToNextMember();
+        } else if (match(PLUS_EQUAL)) {
+            ignoreAllWhitespace();
+            if (match(LEFT_BRACKET)) {
+                HArray * append = concatAdjacentArrays();
+                std::vector<std::variant<HTree*,HArray*,HSimpleValue*,HPath*>> list;
+                HPath * appendPath = new HPath(rootPath, true);
+                list.push_back(appendPath);
+                list.push_back(append);
+                HSubstitution * sub = new HSubstitution(list);
+                appendPath->parent = sub;
+                sub->interrupts = std::vector<bool>{false, false};
+                if (target->addMember(keyValue, sub)) {
+                    pushStack(rootPath, target->members[keyValue]);
+                } else {
+                    pushStack(rootPath, sub);
+                }
+            } else {
+                error(peek().line, "Expected an array, got " + peek().lexeme);
+            }
+            consumeToNextMember();
         } else {
             error(peek().line, "Expected '=' or ':', got " + peek().lexeme + ", after the key '" + keyValue + "'");
             consumeMember();
@@ -1266,21 +1288,23 @@ HSimpleValue * HParser::hoconSimpleValue() {
     while(check(SIMPLE_VALUES) || check(WHITESPACE)) { // note, the WHITESPACE TokenType differentiates between newlines and traditional whitespace.
         valTokens.push_back(advance());
     }
-    if (valTokens.size() > 1) { // value concat, parse as string
-        std::stringstream ss {""};
-        size_t end = valTokens.size() - 1;
-        if (!check(SUB) && !check(SUB_OPTIONAL)) {
-            auto iter = valTokens.rbegin();
-            while (iter->type == WHITESPACE) {
-                end--;
-                iter++;
-            }
+    size_t end = valTokens.size() - 1;
+    if (!check(SUB) && !check(SUB_OPTIONAL)) {
+        auto iter = valTokens.rbegin();
+        while (iter->type == WHITESPACE) {
+            end--;
+            iter++;
         }
-        for (size_t i = 0; i < end + 1; i++) {
+        end++;
+    }
+    if (end > 1) { // value concat, parse as string,
+        std::stringstream ss {""};
+        
+        for (size_t i = 0; i < end; i++) {
             ss << valTokens[i].lexeme;
         }
-        return new HSimpleValue(ss.str(), valTokens, end+1); // end index is exclusive; 
-    } else if (valTokens.size() == 1) { // parse normally
+        return new HSimpleValue(ss.str(), valTokens, end); // end index is exclusive; 
+    } else if (end == 1) { // parse normally
         return new HSimpleValue(valTokens.begin()->literal, valTokens, 1);
     } else {
         error(peek().line, "Expected a value, got nothing");
@@ -1890,7 +1914,7 @@ void HParser::resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitut
 }
 
 std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePath(HPath* path) {
-    std::cout << path->str() << std::endl;
+    //std::cout << path->str() << std::endl;
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
     auto it = stack.rbegin();
     if (path->isSelfReference()) { // handle unset counter here.

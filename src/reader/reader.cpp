@@ -70,7 +70,7 @@ void ConfigFile::runFile() {
         std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
 
-    parser->getStack();
+    //parser->getStack();
 
     parser->resolveSubstitutions();
     if (!parser->validConf) {
@@ -83,6 +83,7 @@ void ConfigFile::runFile() {
     }
     std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser->rootObject)->str() << std::endl;
     parserPtr = parser;
+    /*
     std::cout << getStringByPath("foo.a") << std::endl;
     std::cout << getStringByPath("foo.b") << std::endl;
     std::cout << getStringByPath("foo.g") << std::endl;
@@ -93,6 +94,7 @@ void ConfigFile::runFile() {
     std::cout << out << std::endl;
     std::cout << std::to_string(getIntByPath("foo.d")) << std::endl;
     std::cout << std::to_string(getDoubleByPath("foo.c")) << std::endl;
+    */
 }
 
 ConfigFile::~ConfigFile() {
@@ -165,5 +167,14 @@ int ConfigFile::getIntByPath(std::string const& str) {
         }
     } else {
         throw std::runtime_error("Error: getBoolByPath encountered an invalid value at path " + str);
+    }
+}
+
+bool ConfigFile::pathExists(std::string const& str) {
+    std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
+    if (std::holds_alternative<HTree*>(res) && !(std::get<HTree*>(res))) {
+        return false;
+    } else {
+        return true;
     }
 }
