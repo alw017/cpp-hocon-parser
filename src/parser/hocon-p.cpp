@@ -642,6 +642,13 @@ std::vector<std::string> HSubstitution::getPath() {
     return parentPath;
 }
 
+HParser::HParser(HTree * newRoot) {
+    rootObject = newRoot->deepCopy();
+}
+
+HParser::HParser(HArray * newRoot) {
+    rootObject = newRoot->deepCopy();
+}
 
 HParser::~HParser() {
     //std::visit(deleteHObj, rootObject);
@@ -2009,7 +2016,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolveP
 
 std::variant<HTree*, HArray*, HSimpleValue*> HParser::getByPath(std::vector<std::string> const& path) {
     if (std::holds_alternative<HArray*>(rootObject)) {
-        error(0, "cannot use path expressions for a rooted array");
+        throw std::runtime_error("Error: cannot use path expressions for a rooted array");
     }
     HTree * curr = std::get<HTree*>(rootObject);
     for (auto iter = path.begin(); iter != path.end()-1; iter++) {

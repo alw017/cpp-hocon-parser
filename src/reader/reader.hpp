@@ -15,6 +15,8 @@ class ConfigFile {
         HParser * parserPtr;
     public:
         ConfigFile(char * filename);
+        ConfigFile(HTree * newRoot);
+        ConfigFile(HArray * newRoot);
         ~ConfigFile();        
         void runFile(); // void for now but later it will return a map of relevant key/value pairs.
         std::string getStringByPath(std::string const& str);
@@ -25,6 +27,7 @@ class ConfigFile {
         double getDoubleByPath(std::string const& str, double defaultVal);
         int getIntByPath(std::string const& str);
         int getIntByPath(std::string const& str, int defaultVal);
+        ConfigFile getConfig(std::string const& str);
         bool pathExists(std::string const& str);
 };
 

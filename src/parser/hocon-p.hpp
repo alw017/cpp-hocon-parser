@@ -190,6 +190,8 @@ class HParser {
     public:
         bool run(); 
         HParser(std::vector<Token> tokens): tokenList(tokens), length(tokens.size()) {};
+        HParser(HTree * newRoot);
+        HParser(HArray * newRoot);
         ~HParser();
         //access methods:
         std::variant<HTree*, HArray*> getRoot();

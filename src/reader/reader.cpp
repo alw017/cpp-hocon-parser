@@ -15,6 +15,14 @@ auto simpleValueAsString = Overload {
     [](std::string str) { return str; }
 };
 
+auto deleteConfigObj = Overload {                                     
+    [](HTree * obj) { delete obj; },
+    [](HArray * arr) { delete arr; },
+    [](HSimpleValue * val) { delete val; },
+    [](HSubstitution * sub) { delete sub; },
+    [](HPath * path) { delete path; },
+};
+
 std::vector<std::string> splitString(std::string str, char delim) {
     size_t pos = 1;
     size_t start = 0;
@@ -49,6 +57,14 @@ ConfigFile::ConfigFile(char * filename) {
     }
 }
 
+ConfigFile::ConfigFile(HTree * newRoot) {
+    parserPtr = new HParser(newRoot);
+}
+
+ConfigFile::ConfigFile(HArray * newRoot) {
+    parserPtr = new HParser(newRoot);
+}
+
 void ConfigFile::runFile() {
     std::vector<Token> tokens;
     Lexer lexer = Lexer(file);
@@ -81,12 +97,16 @@ void ConfigFile::runFile() {
         }
         return;
     }
-    std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser->rootObject)->str() << std::endl;
+    if (std::holds_alternative<HTree*>(parser->rootObject)) {
+        std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser->rootObject)->str() << std::endl;
+    } else {
+        std::cout << "\nResolved Object String: \n" << std::get<HArray*>(parser->rootObject)->str() << std::endl;
+    }
     parserPtr = parser;
-    std::cout << getStringByPath("foo.a", "failed to resolve") << std::endl;
-    std::cout << std::to_string(getBoolByPath("databases", false)) << std::endl;
-    std::cout << std::to_string(getDoubleByPath("testVal")) << std::endl;
-    std::cout << std::to_string(getIntByPath("databases", 0)) << std::endl;
+    //std::cout << getStringByPath("foo.a", "failed to resolve") << std::endl;
+    //std::cout << std::to_string(getBoolByPath("databases", false)) << std::endl;
+    //std::cout << std::to_string(getDoubleByPath("testVal")) << std::endl;
+    //std::cout << std::to_string(getIntByPath("databases", 0)) << std::endl;
     /*
     std::cout << getStringByPath("foo.a") << std::endl;
     std::cout << getStringByPath("foo.b") << std::endl;
@@ -102,6 +122,7 @@ void ConfigFile::runFile() {
 }
 
 ConfigFile::~ConfigFile() {
+    std::visit(deleteConfigObj, parserPtr->rootObject);
     delete parserPtr;
 }
 
@@ -240,6 +261,17 @@ int ConfigFile::getIntByPath(std::string const& str, int defaultVal) {
         }
     } else {
         return defaultVal;
+    }
+}
+
+ConfigFile ConfigFile::getConfig(std::string const& str) {
+    std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
+    if (std::holds_alternative<HTree*>(res)) {
+        return ConfigFile(std::get<HTree*>(res));
+    } else if (std::holds_alternative<HArray*>(res)) {
+        return ConfigFile(std::get<HArray*>(res));
+    } else {
+        throw std::runtime_error("Error: getConfig encountered a non array/object");
     }
 }
 
