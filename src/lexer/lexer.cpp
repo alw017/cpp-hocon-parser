@@ -229,7 +229,7 @@ void Lexer::number() {
         while(isDigit(peek())) advance();
         isDouble = true;
     }
-    if (true/*isDouble*/) {
+    if (isDouble) {
             addToken(NUMBER, std::strtod(source.substr(start, current-start).c_str(), nullptr));
     } else {
             addToken(NUMBER, std::stoi(source.substr(start, current-start)));

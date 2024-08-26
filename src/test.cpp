@@ -1,58 +1,197 @@
-#include <lexer.hpp>
+#define CATCH_CONFIG_MAIN
 #include <reader.hpp>
-#include <hocon-p.hpp>
+#include <catch2/catch_test_macros.hpp>
 
-#define IS_TRUE(x) { if (!(x)) std::cout << __FUNCTION__ << " failed on line " << __LINE__ << std::endl; }
+// ----------------------------------- parser -----------------------------------
 
-bool ASSERT_STRING(std::string str, std::string expect) {
-    if (str == expect) {
-        return true;
-    } else {
-        std::cout << "expected " << expect << ", got " << str << std::endl;
-        return false;
+TEST_CASE("hoconSimpleValue") {
+    SECTION( "Value concatenation case" ) {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("testvalue 214 true false m   \n,");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        HSimpleValue * v = parser.hoconSimpleValue();
+        REQUIRE( std::get<std::string>(v->svalue) == "testvalue 214 true false m" );
+        REQUIRE( parser.peek().lexeme == "\n");
+        REQUIRE( parser.peek().type == NEWLINE);
+        REQUIRE( v->defaultEnd == 9);
+        REQUIRE( v->tokenParts.back().type == WHITESPACE);
+        REQUIRE( v->tokenParts.size() == 10);
+        delete v;
+    }
+    
+    SECTION( "Single Value Case - string" ) {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("testvalue\n");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        HSimpleValue * v = parser.hoconSimpleValue();
+        REQUIRE( std::get<std::string>(v->svalue) == "testvalue" );
+        REQUIRE( parser.peek().lexeme == "\n");
+        REQUIRE( parser.peek().type == NEWLINE);
+        REQUIRE( v->defaultEnd == 1);
+        REQUIRE( v->tokenParts.size() == 1);
+        delete v;
+    }
+
+    SECTION( "Single Value Case - int" ) {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("1024\n");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        HSimpleValue * v = parser.hoconSimpleValue();
+        REQUIRE( v->svalue.index() == 0 );
+        REQUIRE( std::get<int>(v->svalue) == 1024 );
+        REQUIRE( parser.peek().lexeme == "\n");
+        REQUIRE( parser.peek().type == NEWLINE);
+        REQUIRE( v->defaultEnd == 1);
+        REQUIRE( v->tokenParts.size() == 1);
+        delete v;
+    }
+
+    SECTION( "Single Value Case - double" ) {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("1024.192e-4\n");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        HSimpleValue * v = parser.hoconSimpleValue();
+        REQUIRE( v->svalue.index() == 1 );
+        double exp = std::strtod("1024.192e-4", nullptr);
+        REQUIRE( std::get<double>(v->svalue) == exp );
+        REQUIRE( parser.peek().lexeme == "\n");
+        REQUIRE( parser.peek().type == NEWLINE);
+        REQUIRE( v->defaultEnd == 1);
+        REQUIRE( v->tokenParts.size() == 1);
+        delete v;
+    }
+
+    SECTION( "Single Value Case - bool" ) {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("false\n");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        HSimpleValue * v = parser.hoconSimpleValue();
+        REQUIRE( v->svalue.index() == 2 );
+        REQUIRE( std::get<bool>(v->svalue) == false );
+        REQUIRE( parser.peek().lexeme == "\n");
+        REQUIRE( parser.peek().type == NEWLINE);
+        REQUIRE( v->defaultEnd == 1);
+        REQUIRE( v->tokenParts.size() == 1);
+        delete v;
     }
 }
 
-bool ASSERT(std::string str, std::string expect) {
-    if (str == expect) {
-        return true;
-    } return false;
+TEST_CASE( "hoconKey" ) {
+
+    SECTION("single path") {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("test string 1\n :");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        std::string k = parser.hoconKey()[0];
+        REQUIRE( k == "test string 1");
+    }
+
+    SECTION("multiple path") {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("first.second.third:");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        std::vector<std::string> k = parser.hoconKey();
+        REQUIRE( k[0] == "first" );
+        REQUIRE( k[1] == "second" );
+        REQUIRE( k[2] == "third" );        
+    }
+    
+    SECTION("multiple path with quoted strings") {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("first.\"second.third\":");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        std::vector<std::string> k = parser.hoconKey();
+        REQUIRE( k[0] == "first" );
+        REQUIRE( k[1] == "second.third" );
+    }
 }
+
+TEST_CASE( "rootTree" ) {
+
+}
+
+TEST_CASE( "hoconTree" ) {
+
+}
+
+TEST_CASE( "hoconArray" ) {
+
+}
+
+TEST_CASE( "hoconArraySubTree" ) {
+
+}
+
+TEST_CASE( "Test Include" ) {
+    SECTION( "FILE TEST" ) {
+
+    }
+
+    SECTION( "URL TEST" ) {
+
+    }
+
+    SECTION( "REQUIRED" ) {
+
+    }
+}
+
+TEST_CASE( "Test Comments" ) {
+
+}
+
+TEST_CASE( "Omitted Root Brace" ) {
+
+}
+
+TEST_CASE( "Key-value separators" ) {
+
+}
+
+TEST_CASE( "Commas" ) {
+
+}
+
+TEST_CASE( "Duplicate Keys/object merging" ) {
+
+}
+
+TEST_CASE( "Array concatenation" ) {
+
+}
+
+TEST_CASE( "Paths as Keys" ) {
+
+}
+
+TEST_CASE( "Substitutions" ) {
+    //normal
+    //string preserve whitespace   
+    //self-referential
+    //recursive object
+    //optional
+    //cycle handling
+}
+
+// ----------------------------------- lexer ------------------------------------
+
+// each token type
+
+// --------------------------------- configfile ---------------------------------
+
+// api method testing.
 
 HSimpleValue * debug_create_simple_string(std::string str) {
     Token t = Token(UNQUOTED_STRING, str, str, 0);
     return new HSimpleValue(str, std::vector<Token>{t}, 0);
-}
-
-void test_parser_hoconKey() {
-    std::vector<Token> tokens = std::vector<Token>();
-    Lexer lexer = Lexer("test string 1 :");
-    tokens = lexer.run();
-    HParser parser = HParser(tokens);
-    std::string k = parser.hoconKey()[0];
-    bool succeed = ASSERT_STRING(k, "test string 1");
-    if (succeed) {
-        std::cout << "hoconKey() succeeded" << std::endl;
-    } else {
-        std::cout << "hoconKey() failed" << std::endl;
-    }
-}
-
-void test_parser_hoconSimpleValue() {
-    std::vector<Token> tokens = std::vector<Token>();
-    Lexer lexer = Lexer("testvalue 214 true false m\n,");
-    tokens = lexer.run();
-    HParser parser = HParser(tokens);
-    HSimpleValue * v = parser.hoconSimpleValue();
-    HTree * root = new HTree();
-    root->addMember("test", v);
-    bool succeed = ASSERT_STRING(v->str(), "testvalue 214 true false m");
-    if (succeed) {
-        std::cout << "hoconSimpleValue() succeeded" << std::endl;
-    } else {
-        std::cout << "hoconSimpleValue() failed" << std::endl;
-    }
-    delete root;
 }
 
 void test_parser_hoconTree_simpleValuesOnly() {
@@ -128,25 +267,11 @@ void test_parser_splitPath() {
     tokens.push_back(Token(QUOTED_STRING, "\"bar.baz\"", "bar.baz", 0));
     tokens.push_back(Token(UNQUOTED_STRING, ".gis", ".gis", 0));
     std::vector<std::string> out = HParser::splitPath(tokens);
-    bool succeed = out.size() == 3;
-    if (succeed) {
-        succeed = ASSERT_STRING(out[0], "foo");
-        succeed = ASSERT_STRING(out[1], "bar.baz");
-        succeed = ASSERT_STRING(out[2], "gis");
-    } else {
-        std::cout << "Error, splitPath output unexpected number of strings, " << std::to_string(out.size()) << " instead of 3." << std::endl;
-    }
-
     test_parser_splitString("10.0foo");
     test_parser_splitString("foo10.0");
     test_parser_splitString("foo\"10.0\"");
     test_parser_splitString("1.2.3");
     
-    if (succeed) {
-        std::cout << "splitPath() succeeded" << std::endl;
-    } else {
-        std::cout << "splitPath() failed" << std::endl;
-    }
 }
 
 void test_parser_findCreate() {
@@ -204,24 +329,5 @@ void test_parser_includeFile() {
     tokens = lexer.run();
     HParser parser = HParser(tokens);
     std::tuple<std::string, IncludeType, bool> out = parser.hoconInclude();
-}
-
-void run_tests(){
-    test_parser_hoconKey();
-    test_parser_hoconSimpleValue();
-    //test_parser_hoconArray();
-    test_parser_mergeTrees();
-    test_parser_concatArray();
-    test_parser_splitPath();
-    test_parser_findCreate();
-    test_parser_getPath();
-}
-
-int main() {
-    std::cout << "starting tests" << std::endl;
-    //run_tests();
-    //test_parser_substitution();
-    //test_parser_splitString("test.one.two.three.\"dont.split\".end");
-    test_parser_includeFile();
 }
 

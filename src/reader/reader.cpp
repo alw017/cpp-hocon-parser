@@ -90,11 +90,11 @@ void ConfigFile::runFile() {
 
     parser->resolveSubstitutions();
     if (!parser->validConf) {
-        std::cout << "Invalid Configu ration, Aborted" << std::endl;
-        std::cout << "Dumping tokens..." << std::endl;
-        for (Token t : tokens) {
-            std::cout << t.str() << std::endl;
-        }
+        std::cout << "Invalid Configuration, Aborted" << std::endl;
+        //std::cout << "Dumping tokens..." << std::endl;
+        //for (Token t : tokens) {
+        //    std::cout << t.str() << std::endl;
+        //}  
         return;
     }
     if (std::holds_alternative<HTree*>(parser->rootObject)) {
@@ -103,22 +103,6 @@ void ConfigFile::runFile() {
         std::cout << "\nResolved Object String: \n" << std::get<HArray*>(parser->rootObject)->str() << std::endl;
     }
     parserPtr = parser;
-    //std::cout << getStringByPath("foo.a", "failed to resolve") << std::endl;
-    //std::cout << std::to_string(getBoolByPath("databases", false)) << std::endl;
-    //std::cout << std::to_string(getDoubleByPath("testVal")) << std::endl;
-    //std::cout << std::to_string(getIntByPath("databases", 0)) << std::endl;
-    /*
-    std::cout << getStringByPath("foo.a") << std::endl;
-    std::cout << getStringByPath("foo.b") << std::endl;
-    std::cout << getStringByPath("foo.g") << std::endl;
-    std::cout << getStringByPath("foo.i") << std::endl;
-    std::string out = getBoolByPath("foo.g")? "true" : "false";
-    std::cout << out << std::endl;
-    out = getBoolByPath("foo.i") ? "true" : "false";
-    std::cout << out << std::endl;
-    std::cout << std::to_string(getIntByPath("foo.d")) << std::endl;
-    std::cout << std::to_string(getDoubleByPath("foo.c")) << std::endl;
-    */
 }
 
 ConfigFile::~ConfigFile() {
