@@ -50,6 +50,57 @@ char Lexer::peek() {
     return source[current];
 }
 
+void Lexer::multiLineString() {
+    std::stringstream ss{""};
+    while ((peek() != '"' || peekNext() != '"' || peekNextNext() != '"') && !atEnd()) {
+        char next = advance();
+        switch(next) {
+            case '\n':
+                ss << "\\n";
+                break;
+            case '"':
+                ss << "\\" << "\"";
+                break;
+            case '\t':
+                ss << "\\t";
+                break;
+            case '\r':
+                ss << "\\t";
+                break;
+            default:
+                ss << next;
+        }
+    }
+    
+    if (atEnd()) {
+        error(line, "Unterminated string");
+        return;
+    }
+
+    char curr = advance();
+    while(peekNextNext() == '"') {
+        switch(curr) {
+            case '\n':
+                ss << "\\n";
+                break;
+            case '"':
+                ss << "\\" << "\"";
+                break;
+            case '\t':
+                ss << "\\t";
+                break;
+            case '\r':
+                ss << "\\t";
+                break;
+            default:
+                ss << curr;
+        }
+        curr = advance();
+    }
+    advance(); advance(); // consume remaining quotes.
+    addToken(QUOTED_STRING, ss.str());
+}
+
 void Lexer::quotedString() {
     std::stringstream ss{""};
     while (peek() != '"' && !atEnd()) {
@@ -225,7 +276,11 @@ void Lexer::scanToken() {
             }
             break;
         case '#': comment(); break;
-        case '"': quotedString(); break;
+        case '"': 
+            if (peek() == '"' && peekNext() == '"') {
+                advance(); advance(); multiLineString();
+            } else quotedString(); 
+            break;
         case '-': number(); break;
         case '+':
             if (peek() == '=') {

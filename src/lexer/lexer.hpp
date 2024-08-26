@@ -34,6 +34,7 @@ class Lexer {
         char peek();
         char peekNext();
         char peekNextNext();
+        void multiLineString();
         void quotedString();
         void unquotedString(char c);
         void number();
