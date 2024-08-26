@@ -83,6 +83,10 @@ void ConfigFile::runFile() {
     }
     std::cout << "\nResolved Object String: \n" << std::get<HTree*>(parser->rootObject)->str() << std::endl;
     parserPtr = parser;
+    std::cout << getStringByPath("foo.a", "failed to resolve") << std::endl;
+    std::cout << std::to_string(getBoolByPath("databases", false)) << std::endl;
+    std::cout << std::to_string(getDoubleByPath("testVal")) << std::endl;
+    std::cout << std::to_string(getIntByPath("databases", 0)) << std::endl;
     /*
     std::cout << getStringByPath("foo.a") << std::endl;
     std::cout << getStringByPath("foo.b") << std::endl;
@@ -111,6 +115,16 @@ std::string ConfigFile::getStringByPath(std::string const& str) {
     }
 }
 
+std::string ConfigFile::getStringByPath(std::string const& str, std::string const& defaultVal) {
+    std::vector<std::string> path = HParser::splitPath(str);
+    std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(path);
+    if (std::holds_alternative<HSimpleValue*>(res)) {
+        return std::visit(simpleValueAsString, std::get<HSimpleValue*>(res)->svalue);
+    } else {
+        return defaultVal;
+    }
+}
+
 bool ConfigFile::getBoolByPath(std::string const& str) {
     std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
     if (std::holds_alternative<HSimpleValue*>(res)) {
@@ -127,6 +141,47 @@ bool ConfigFile::getBoolByPath(std::string const& str) {
                 throw std::runtime_error("Error: getBoolByPath encountered an invalid value '" + val + "' at path " + str);
             }
         } else {
+            throw std::runtime_error("Error: getBoolByPath encountered an invalid value type at path " + str);
+        }
+    } else {
+        throw std::runtime_error("Error: the path, " + str + " doesn't exist in the configuration");
+    }
+}
+
+bool ConfigFile::getBoolByPath(std::string const& str, bool defaultVal) {
+    std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
+    if (std::holds_alternative<HSimpleValue*>(res)) {
+        std::variant<int, double, bool, std::string> svalue = std::get<HSimpleValue*>(res)->svalue;
+        if (std::holds_alternative<bool>(svalue)) {
+            return std::get<bool>(svalue);
+        } else if (std::holds_alternative<std::string>(svalue)) {
+            std::string val = std::get<std::string>(svalue);
+            if (val == "true" || val == "yes" || val == "on") {
+                return true;
+            } else if (val == "false" || val == "no" || val == "off") {
+                return false;
+            } else {
+                throw std::runtime_error("Error: getBoolByPath encountered an invalid value '" + val + "' at path " + str);
+            }
+        } else {
+            throw std::runtime_error("Error: getBoolByPath encountered an invalid value type at path " + str);
+        }
+    } else {
+        return defaultVal;
+    }
+}
+
+double ConfigFile::getDoubleByPath(std::string const& str) {
+    std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
+    if (std::holds_alternative<HSimpleValue*>(res)) {
+        std::variant<int, double, bool, std::string> svalue = std::get<HSimpleValue*>(res)->svalue;
+        if (std::holds_alternative<std::string>(svalue)) {
+            return std::strtod(std::get<std::string>(svalue).c_str(), nullptr); // really should add a check for a valid string value here.
+        } else if (std::holds_alternative<int>(svalue)) {
+            return (double) std::get<int>(svalue);
+        } else if (std::holds_alternative<double>(svalue)) {
+            return std::get<double>(svalue);
+        } else {
             throw std::runtime_error("Error: getBoolByPath encountered an invalid value at path " + str);
         }
     } else {
@@ -134,7 +189,7 @@ bool ConfigFile::getBoolByPath(std::string const& str) {
     }
 }
 
-double ConfigFile::getDoubleByPath(std::string const& str) {
+double ConfigFile::getDoubleByPath(std::string const& str, double defaultVal) {
     std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
     if (std::holds_alternative<HSimpleValue*>(res)) {
         std::variant<int, double, bool, std::string> svalue = std::get<HSimpleValue*>(res)->svalue;
@@ -148,7 +203,7 @@ double ConfigFile::getDoubleByPath(std::string const& str) {
             throw std::runtime_error("Error: getBoolByPath encountered an invalid value at path " + str);
         }
     } else {
-        throw std::runtime_error("Error: getBoolByPath encountered an invalid value at path " + str);
+        return defaultVal;
     }
 }
 
@@ -167,6 +222,24 @@ int ConfigFile::getIntByPath(std::string const& str) {
         }
     } else {
         throw std::runtime_error("Error: getBoolByPath encountered an invalid value at path " + str);
+    }
+}
+
+int ConfigFile::getIntByPath(std::string const& str, int defaultVal) {
+    std::variant<HTree*,HArray*,HSimpleValue*> res = parserPtr->getByPath(HParser::splitPath(str));
+    if (std::holds_alternative<HSimpleValue*>(res)) {
+        std::variant<int, double, bool, std::string> svalue = std::get<HSimpleValue*>(res)->svalue;
+        if (std::holds_alternative<std::string>(svalue)) {
+            return std::stoi(str); // really should add a check for a valid string value here.
+        } else if (std::holds_alternative<int>(svalue)) {
+            return std::get<int>(svalue);
+        } else if (std::holds_alternative<double>(svalue)) {
+            return (int) std::get<double>(svalue);
+        } else {
+            throw std::runtime_error("Error: getBoolByPath encountered an invalid value at path " + str);
+        }
+    } else {
+        return defaultVal;
     }
 }
 
