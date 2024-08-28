@@ -1746,6 +1746,7 @@ std::string HParser::getFileText(std::string const& link, IncludeType type) {
 // parsing steps:
 
 void HParser::parseTokens() {
+    ignoreAllWhitespace();
     if (match(LEFT_BRACKET)) { // root array
         ignoreAllWhitespace();
         rootObject = hoconArray();
@@ -1761,6 +1762,7 @@ void HParser::parseTokens() {
         ignoreAllWhitespace();
 
     }
+    ignoreAllWhitespace();
     if (!atEnd()){
         error(peek().line, "Expected EOF, got " + peek().lexeme);
     }
