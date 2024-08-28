@@ -2,7 +2,14 @@
 #include <reader.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-// ----------------------------------- parser -----------------------------------
+HParser initWithString(std::string str) {
+    std::vector<Token> tokens = std::vector<Token>();
+    Lexer lexer = Lexer(str);
+    tokens = lexer.run();
+    return HParser(tokens);
+}
+
+// ---------------------------------- internal ----------------------------------
 
 TEST_CASE("hoconSimpleValue") {
     SECTION( "Value concatenation case" ) {
@@ -114,25 +121,94 @@ TEST_CASE( "hoconKey" ) {
     }
 }
 
-TEST_CASE( "rootTree" ) {
+TEST_CASE( "hoconTree" ) {
+    SECTION("simple case") {
+        HParser parser = initWithString("{a = b}");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(rootObj->members.count("a") == 1);
+        REQUIRE(std::get<HSimpleValue*>(rootObj->members["a"])->svalue.index() == 3);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(rootObj->members["a"])->svalue) == "b");
+    }
 
+    SECTION("nested case") {
+        HParser parser = initWithString("{a = {a = {b = {d = 2}}}}");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(rootObj->members.count("a") == 1);
+        REQUIRE(std::get<HTree*>(rootObj->members["a"])->members.count("a") == 1);
+        REQUIRE(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members.count("b") == 1);
+        REQUIRE(std::get<HTree*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members["b"])->members.count("d") == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members["b"])->members["d"])->svalue) == 2);
+    }
+
+    SECTION("merged case") {
+        HParser parser = initWithString("{a = {b = 2, c = 3} {c = 0, d = value}}");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["a"])->members["b"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["a"])->members["c"])->svalue) == 0);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["a"])->members["d"])->svalue) == "value");
+    }
 }
 
-TEST_CASE( "hoconTree" ) {
+TEST_CASE( "rootTree" ) {
+    SECTION("simple case") {
+        HParser parser = initWithString("a = b");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(rootObj->members.count("a") == 1);
+        REQUIRE(std::get<HSimpleValue*>(rootObj->members["a"])->svalue.index() == 3);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(rootObj->members["a"])->svalue) == "b");
+    }
 
+    SECTION("nested case") {
+        HParser parser = initWithString("a = {a = {b = {d = 2}}}");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(rootObj->members.count("a") == 1);
+        REQUIRE(std::get<HTree*>(rootObj->members["a"])->members.count("a") == 1);
+        REQUIRE(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members.count("b") == 1);
+        REQUIRE(std::get<HTree*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members["b"])->members.count("d") == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members["b"])->members["d"])->svalue) == 2);
+    }
+
+    SECTION("merged case") {
+        HParser parser = initWithString("a = {b = 2, c = 3} {c = 0, d = value}");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["a"])->members["b"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["a"])->members["c"])->svalue) == 0);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["a"])->members["d"])->svalue) == "value");
+    }
 }
 
 TEST_CASE( "hoconArray" ) {
-
+    HParser parser = initWithString("string, 1, {a = 2}, t]");
+    HArray * arr = parser.hoconArray();
+    REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(arr->elements[0])->svalue) == "string");
+    REQUIRE(std::get<int>(std::get<HSimpleValue*>(arr->elements[1])->svalue) == 1);
+    REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(arr->elements[2])->members["a"])->svalue) == 2);
+    REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(arr->elements[3])->svalue) == "t");
 }
 
 TEST_CASE( "hoconArraySubTree" ) {
-
+    HParser parser = initWithString("a = 1}");
+    HTree * obj = parser.hoconArraySubTree();
+    REQUIRE(parser.stack.size() == 0);
+    REQUIRE(std::get<int>(std::get<HSimpleValue*>(obj->members["a"])->svalue) == 1);
 }
 
-TEST_CASE( "Test Include" ) {
-    SECTION( "FILE TEST" ) {
+// ----------------------------------- parser -----------------------------------
 
+TEST_CASE( "Test Include" ) {
+    SECTION( "File Test Required" ) {
+        HParser parser = initWithString("{a = 2, b = {include file(\"../tests/test_include_file.conf\")} }");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(rootObj->members["a"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["b"])->members["c"])->svalue) == 2);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["b"])->members["d"])->svalue) == "value");
     }
 
     SECTION( "URL TEST" ) {
@@ -140,6 +216,10 @@ TEST_CASE( "Test Include" ) {
     }
 
     SECTION( "REQUIRED" ) {
+
+    }
+
+    SECTION( "include file with substitution" ) {
 
     }
 }
