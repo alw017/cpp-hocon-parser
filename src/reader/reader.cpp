@@ -75,6 +75,7 @@ void ConfigFile::runFile() {
     }
 
     HParser * parser = new HParser(tokens);
+    parserPtr = parser;
     parser->lexer = &lexer;
     parser->parseTokens();
 
@@ -85,29 +86,14 @@ void ConfigFile::runFile() {
         HArray * p = std::get<HArray*>(parser->rootObject);
         std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
-
-    parser->getStack();
-
-    std::cout << "done" << std::endl;
-
     if (!parser->validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
-        std::cout << "Dumping tokens..." << std::endl;
-        for (Token t : tokens) {
-            std::cout << t.str() << std::endl;
-        }  
         return;
     }
-
-    
 
     parser->resolveSubstitutions();
     if (!parser->validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
-        //std::cout << "Dumping tokens..." << std::endl;
-        //for (Token t : tokens) {
-        //    std::cout << t.str() << std::endl;
-        //}  
         return;
     }
     if (std::holds_alternative<HTree*>(parser->rootObject)) {
@@ -115,7 +101,6 @@ void ConfigFile::runFile() {
     } else {
         std::cout << "\nResolved Object String: \n" << std::get<HArray*>(parser->rootObject)->str() << std::endl;
     }
-    parserPtr = parser;
 }
 
 ConfigFile::~ConfigFile() {

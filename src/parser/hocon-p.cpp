@@ -124,6 +124,17 @@ auto HArrayDecrementIndex = Overload {
     [](HSubstitution * sub) { sub->key = std::to_string(std::stoi(sub->key) - 1); }
 };
 
+auto setParentAndKey = Overload {
+    [](HTree * obj, HTree * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HTree * obj, HArray * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HArray * obj, HTree * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HArray * obj, HArray * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HSimpleValue * obj, HTree * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HSimpleValue * obj, HArray * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HSubstitution * obj, HTree * parent, std::string key) {obj->parent = parent; obj->key = key;},
+    [](HSubstitution * obj, HArray * parent, std::string key) {obj->parent = parent; obj->key = key;},
+};
+
 HTree::HTree() : members(std::unordered_map<std::string, std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*>>()) {}
 
 HTree::~HTree() {
@@ -151,6 +162,25 @@ bool HTree::addMember(std::string const& key, std::variant<HTree*, HArray*, HSim
         HSubstitution * sub = std::get<HSubstitution*>(value);
         sub->parent = this;
         sub->key = key;
+        for (auto subValue : sub->values) {
+            switch(subValue.index()) {
+                case 0:
+                    std::get<HTree*>(subValue)->parent = this;
+                    std::get<HTree*>(subValue)->root = false;
+                    std::get<HTree*>(subValue)->key = key;
+                    break;
+                case 1:
+                    std::get<HArray*>(subValue)->parent = this;
+                    std::get<HArray*>(subValue)->root = false;
+                    std::get<HArray*>(subValue)->key = key;
+                    break;
+                case 2:
+                    std::get<HSimpleValue*>(subValue)->parent = this;
+                    break;
+                case 3:
+                    break;
+            }
+        }
     }
     if(members.count(key) == 0) { // new key case
         //std::cout << "added key " << key << " with value " << std::visit(stringify, value) << std::endl;
@@ -600,12 +630,10 @@ std::string HSubstitution::str() {
     } else {
         out = "";
     }
-    if (debug) {
+    if (true) {
         std::vector<std::string> path = getPath();
-        out += " ";
-        for(auto str : path) {
-            out += str + ".";
-        }
+        out += " --- ";
+        out += pathToString(path);
     }
     //out += " stack counter = " + std::to_string(counter);
     
@@ -717,6 +745,7 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
             if (std::holds_alternative<HPath*>(val)) {
                 HPath* hpath = std::get<HPath*>(val);
                 hpath->counter = hpath->counter == -1 ? stack.size() : hpath->counter; 
+                //std::cout << hpath->str() << " : " << std::to_string(hpath->counter) << std::endl;
             }
         }
         //unresolvedSubs.push_back(sub->deepCopy());
@@ -1846,6 +1875,8 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                         res = resolveSub(nextRes, set, history);
                     }
                 }
+                std::variant<std::string> keyWrapper = sub->key;
+                std::visit(setParentAndKey, res, sub->parent, keyWrapper);
 
                 std::unordered_set<HSubstitution*> subs = std::visit(getSubstitutions, res);
                 if (!subs.empty()) {
@@ -1905,16 +1936,11 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
             }
         }
     }
-    if (debug) {
-        if (std::visit(valueExists, concatValue)) {
-            std::cout << "Final constructed value: \n" << std::visit(stringify, concatValue) << std::endl;
-        } else {
-            std::cout << "substitution did not contain any resolved values" << std::endl;
+    if (std::visit(valueExists, concatValue)) {
+        std::unordered_set<HSubstitution*> remainingSubs = std::visit(getSubstitutions, concatValue);
+        if(!remainingSubs.empty()) {
+            resolveObj(concatValue, history);
         }
-    }
-    std::unordered_set<HSubstitution*> remainingSubs = std::visit(getSubstitutions, concatValue);
-    if(!remainingSubs.empty()) {
-        resolveObj(concatValue, history);
     }
     set.erase(sub);
     return concatValue;
@@ -1941,6 +1967,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
     auto it = stack.rbegin();
     if (path->isSelfReference()) { // handle unset counter here.
+        //std::cout << path->str() << " is a self ref" << std::endl;
         it = stack.rend() - path->counter;
     }
     for (it; it != stack.rend(); it++) {
@@ -1981,7 +2008,7 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::concatSu
     switch(target.index()) {
         case 0:
             if(source.index() == 0) {
-                std::cout << "---------------- DEBUG OUTPUT ----------------\n" << std::visit(stringify, target) << "\n---------------- END ------------------" << std::endl;
+                //std::cout << "---------------- DEBUG OUTPUT ----------------\n" << std::visit(stringify, target) << "\n---------------- END ------------------" << std::endl;
                 std::get<HTree*>(source)->mergeTrees(std::get<HTree*>(target));
                 std::visit(deleteHObj, target);
             } else {
@@ -2088,10 +2115,6 @@ bool HParser::run() {
     resolveSubstitutions();
     if (!validConf) {
         std::cout << "Invalid Configu ration, Aborted" << std::endl;
-        std::cout << "Dumping tokens..." << std::endl;
-        for (Token t : tokenList) {
-            std::cout << t.str() << std::endl;
-        }
         return false;
     }
     return true;
