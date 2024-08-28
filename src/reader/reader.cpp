@@ -86,6 +86,10 @@ void ConfigFile::runFile() {
         std::cout << "Root Array String: \n" << p->str() << std::endl;
     }
 
+    parser->getStack();
+
+    std::cout << "done" << std::endl;
+
     if (!parser->validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
         std::cout << "Dumping tokens..." << std::endl;
@@ -95,7 +99,7 @@ void ConfigFile::runFile() {
         return;
     }
 
-    //parser->getStack();
+    
 
     parser->resolveSubstitutions();
     if (!parser->validConf) {

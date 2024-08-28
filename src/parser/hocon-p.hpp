@@ -160,8 +160,8 @@ class HParser {
         HArray * concatAdjacentArrays();
         HTree * mergeAdjacentTrees(std::vector<std::string> parentPath);
         HTree * mergeAdjacentArraySubTrees();
-        HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix);
-        HSubstitution * parseSubstitution();
+        HSubstitution * parseSubstitution(std::variant<HTree*,HArray*,HSimpleValue*> prefix, std::vector<std::string> parentPath, bool addingToStack);
+        HSubstitution * parseSubstitution(std::vector<std::string> parentPath, bool addingToStack);
         bool isInclude(Token t);
         std::string getFileText(std::string const& link, IncludeType type);
         
