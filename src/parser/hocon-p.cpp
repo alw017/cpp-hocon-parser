@@ -1912,7 +1912,10 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
             std::cout << "substitution did not contain any resolved values" << std::endl;
         }
     }
-
+    std::unordered_set<HSubstitution*> remainingSubs = std::visit(getSubstitutions, concatValue);
+    if(!remainingSubs.empty()) {
+        resolveObj(concatValue, history);
+    }
     set.erase(sub);
     return concatValue;
 }
@@ -1920,14 +1923,13 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
 void HParser::resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> obj, std::unordered_set<HSubstitution*> history) {
     std::unordered_set<HSubstitution*> subs = std::visit(getSubstitutions, obj);
     std::unordered_set<HSubstitution*> dummy;
-    bool isTree = std::holds_alternative<HTree*>(obj);
-    bool isArray = std::holds_alternative<HArray*>(obj);
     for(auto sub : subs) {
+        bool isTree = std::holds_alternative<HTree*>(sub->parent);
         history.insert(sub);
         if (isTree) {
-            std::get<HTree*>(obj)->members[sub->key] = resolveSub(sub, dummy, history);
+            std::get<HTree*>(sub->parent)->members[sub->key] = resolveSub(sub, dummy, history);
         } else {
-            std::get<HArray*>(obj)->elements[std::stoi(sub->key)] = resolveSub(sub, dummy, history);
+            std::get<HArray*>(sub->parent)->elements[std::stoi(sub->key)] = resolveSub(sub, dummy, history);
         }
         history.erase(sub);
         delete sub;
