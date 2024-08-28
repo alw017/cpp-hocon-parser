@@ -211,16 +211,20 @@ TEST_CASE( "Test Include" ) {
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["b"])->members["d"])->svalue) == "value");
     }
 
-    SECTION( "URL TEST" ) {
-
-    }
-
-    SECTION( "REQUIRED" ) {
-
+    SECTION( "File Test not required" ) {
+        HParser parser = initWithString("b = [a,{ include file(\"../tests/test_i\") }]");
+        parser.parseTokens();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<HArray*>(rootObj->members["b"])->elements.size() == 1);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HArray*>(rootObj->members["b"])->elements[0])->svalue) == "a");
     }
 
     SECTION( "include file with substitution" ) {
-
+        HParser parser = initWithString("{ refToOtherFile = achievedValue, includedFile = { include file(\"../tests/test_include_file_with_sub.conf\") }}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["includedFile"])->members["a"])->svalue) == "achievedValue");
     }
 }
 
