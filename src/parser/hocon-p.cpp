@@ -2028,9 +2028,7 @@ std::variant<HTree*, HArray*, HSimpleValue*> HParser::getByPath(std::vector<std:
                 out = "." + *iter + out;
             }
             out = *path.begin() + out;
-            error(0, "invalid path expression, " + out + " does not exist");
-            HTree * nullObj;
-            return nullObj;
+            throw std::runtime_error("invalid path expression, " + out + " does not exist");
         }
     }
     std::string valueKey = *(path.end()-1);
@@ -2042,7 +2040,7 @@ std::variant<HTree*, HArray*, HSimpleValue*> HParser::getByPath(std::vector<std:
     } else if (std::holds_alternative<HSimpleValue*>(curr->members[valueKey])) {
         result = std::get<HSimpleValue*>(curr->members[valueKey]);
     } else {
-        error(0, "unresolved substitution encountered after parsing.");
+        throw std::runtime_error("unresolved substitution encountered after parsing.");
     }
     return result;
 }
