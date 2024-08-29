@@ -877,7 +877,7 @@ void HParser::consumeToNextRootMember() {
 */
 void HParser::consumeToNextElement() { 
     ignoreInlineWhitespace();
-    bool sepExists = match(std::vector<TokenType>{COMMA, NEWLINE});
+    bool sepExists = check(std::vector<TokenType>{COMMA, NEWLINE});
     if (check(RIGHT_BRACKET)) { 
         return;
     } else if(sepExists) {
@@ -1033,7 +1033,11 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
             delete output;
             return includedTree;
         }
-        std::vector<std::string> path = hoconKey(); 
+        std::vector<std::string> path = hoconKey();
+        if(path.empty()) {
+            consumeMember();
+            continue;
+        } 
         std::string keyValue = path[path.size()-1];
         rootPath.insert(std::end(rootPath), std::begin(path), std::end(path));
         if (path.size() > 1) {
@@ -1220,7 +1224,7 @@ HArray * HParser::hoconArray() {
             //unresolvedSubs.push_back(sub->deepCopy());
             consumeToNextElement();
         } else {
-            error(peek().line, "Expected a {, [ or a simple value, got " + peek().lexeme + "', instead");
+            error(peek().line, "Expected a {, [ or a simple value, got '" + peek().lexeme + "', instead");
             consumeMember();
         }
     }

@@ -97,6 +97,7 @@ TEST_CASE( "hoconKey" ) {
         HParser parser = HParser(tokens);
         std::string k = parser.hoconKey()[0];
         REQUIRE( k == "test string 1");
+        REQUIRE(parser.peek().lexeme == ":");
     }
 
     SECTION("multiple path") {
@@ -107,7 +108,8 @@ TEST_CASE( "hoconKey" ) {
         std::vector<std::string> k = parser.hoconKey();
         REQUIRE( k[0] == "first" );
         REQUIRE( k[1] == "second" );
-        REQUIRE( k[2] == "third" );        
+        REQUIRE( k[2] == "third" ); 
+        REQUIRE(parser.peek().lexeme == ":");       
     }
     
     SECTION("multiple path with quoted strings") {
@@ -118,28 +120,39 @@ TEST_CASE( "hoconKey" ) {
         std::vector<std::string> k = parser.hoconKey();
         REQUIRE( k[0] == "first" );
         REQUIRE( k[1] == "second.third" );
+        REQUIRE(parser.peek().lexeme == ":");
+    }
+
+    SECTION("whitespaces before and after") {
+        std::vector<Token> tokens = std::vector<Token>();
+        Lexer lexer = Lexer("    first    :");
+        tokens = lexer.run();
+        HParser parser = HParser(tokens);
+        std::vector<std::string> k = parser.hoconKey();
+        REQUIRE( k[0] == "first" );
+        REQUIRE(parser.peek().lexeme == ":");       
     }
 }
 
-TEST_CASE( "Omitted root brace/hoconTree" ) {
+TEST_CASE( "hoconTree" ) {
     SECTION("simple case") {
-        HParser parser = initWithString("{a = b}");
-        parser.parseTokens();
-        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        HParser parser = initWithString("a = b}");
+        HTree * rootObj = parser.hoconTree(std::vector<std::string>()); 
         REQUIRE(rootObj->members.count("a") == 1);
         REQUIRE(std::get<HSimpleValue*>(rootObj->members["a"])->svalue.index() == 3);
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(rootObj->members["a"])->svalue) == "b");
+        REQUIRE(parser.atEnd() == true);
     }
 
     SECTION("nested case") {
-        HParser parser = initWithString("{a = {a = {b = {d = 2}}}}");
-        parser.parseTokens();
-        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        HParser parser = initWithString("a = {a = {b = {d = 2}}}}");
+        HTree * rootObj = parser.hoconTree(std::vector<std::string>());
         REQUIRE(rootObj->members.count("a") == 1);
         REQUIRE(std::get<HTree*>(rootObj->members["a"])->members.count("a") == 1);
         REQUIRE(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members.count("b") == 1);
         REQUIRE(std::get<HTree*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members["b"])->members.count("d") == 1);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["a"])->members["a"])->members["b"])->members["d"])->svalue) == 2);
+        REQUIRE(parser.atEnd() == true);
     }
 
     SECTION("merged case") {
@@ -152,7 +165,7 @@ TEST_CASE( "Omitted root brace/hoconTree" ) {
     }
 }
 
-TEST_CASE( "rootTree" ) {
+TEST_CASE( "Omitted root brace/rootTree" ) {
     SECTION("simple case") {
         HParser parser = initWithString("a = b");
         parser.parseTokens();
@@ -202,7 +215,7 @@ TEST_CASE( "hoconArraySubTree" ) {
 // ----------------------------------- parser -----------------------------------
 
 TEST_CASE( "Test Include" ) {
-    SECTION( "File Test Required" ) {
+    SECTION( "File Test" ) {
         HParser parser = initWithString("{a = 2, b = {include file(\"../tests/test_include_file.conf\")} }");
         parser.parseTokens();
         HTree * rootObj = std::get<HTree*>(parser.rootObject);
@@ -211,7 +224,13 @@ TEST_CASE( "Test Include" ) {
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["b"])->members["d"])->svalue) == "value");
     } 
 
-    SECTION( "File Test not required" ) {
+    SECTION( "Required file doesn't exist" ) {
+        HParser parser = initWithString("b = [a,{ include required(file(\"../tests/test_i\")) }]");
+        parser.parseTokens();
+        REQUIRE(parser.validConf == false);
+    }
+
+    SECTION( "not required file doesn't exist" ) {
         HParser parser = initWithString("b = [a,{ include file(\"../tests/test_i\") }]");
         parser.parseTokens();
         HTree * rootObj = std::get<HTree*>(parser.rootObject);
@@ -225,6 +244,10 @@ TEST_CASE( "Test Include" ) {
         parser.resolveSubstitutions();
         HTree * rootObj = std::get<HTree*>(parser.rootObject);
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["includedFile"])->members["a"])->svalue) == "achievedValue");
+    }
+
+    SECTION( "include file with include" ) {
+        // TODO unimplemented
     }
 }
 
@@ -260,6 +283,8 @@ TEST_CASE( "Test Comments" ) {
         HTree * root2 = std::get<HTree*>(parser2.rootObject);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(root1->members["test"])->svalue) == 2);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(root2->members["a"])->svalue) == 2);
+        REQUIRE(parser1.validConf == true);
+        REQUIRE(parser2.validConf == true);
     }
 
     SECTION( "Comment after member definition" ) {
@@ -268,6 +293,7 @@ TEST_CASE( "Test Comments" ) {
         HTree * root = std::get<HTree*>(parser.rootObject);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["c"])->svalue) == 2);
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["d"])->svalue) == "value");
+        REQUIRE(parser.validConf == true);
     }
 
     SECTION( "Comments between keyvalue separators" ) {
@@ -276,6 +302,7 @@ TEST_CASE( "Test Comments" ) {
         HTree * root = std::get<HTree*>(parser.rootObject);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["c"])->svalue) == 2);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["d"])->svalue) == 2);
+        REQUIRE(parser.validConf == true);
     }
 
     SECTION( "Comments between shorthand obj definition" ) {
@@ -283,19 +310,171 @@ TEST_CASE( "Test Comments" ) {
         parser.parseTokens();
         HTree * root = std::get<HTree*>(parser.rootObject);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["obj"])->members["a"])->svalue) == 2);
+        REQUIRE(parser.validConf == true);
     }
 }
 
 TEST_CASE( "Commas" ) {
+    SECTION( "Trailing Commas" ) {
+        HParser parser = initWithString("arr = [1,2,3,]");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(parser.validConf == true);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root->members["arr"])->elements[0])->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root->members["arr"])->elements[1])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root->members["arr"])->elements[2])->svalue) == 3);
+    }
 
+    SECTION( "Array Double Commas" ) {
+        HParser parser = initWithString("arr = [1,,2]");
+        parser.parseTokens();
+        REQUIRE(parser.validConf == false);
+        HParser sec = initWithString("arr = [,1,2]");
+        sec.parseTokens();
+        REQUIRE(sec.validConf == false);
+        HParser third = initWithString("arr = [1,2,,]");
+        third.parseTokens();
+        REQUIRE(third.validConf == false);
+    }
+
+    SECTION( "Object Double Commas" ) {
+        HParser parser = initWithString("obj = {a=2,,b=3}");
+        parser.parseTokens();
+        REQUIRE(parser.validConf == false);
+        HParser sec = initWithString("obj = {,a=2,b=2}");
+        sec.parseTokens();
+        REQUIRE(sec.validConf == false);
+        HParser third = initWithString("obj = {a=1,b=2,,}");
+        third.parseTokens();
+        REQUIRE(third.validConf == false);
+    }
 }
 
 TEST_CASE( "Duplicate Keys/object merging" ) {
+    SECTION( "Duplicate Key overwrite simple -> simple" ) {
+        HParser parser1 = initWithString("val = 1\nval =2");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root1->members["val"])->svalue) == 2);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[0].second)->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[1].second)->svalue) == 2);
+    }
 
+    SECTION( "Duplicate Key overwrite simple -> obj" ) {
+        HParser parser1 = initWithString("val = 1\nval = {a = 2}");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["val"])->members["a"])->svalue) == 2);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[0].second)->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[1].second)->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser1.stack[2].second)->members["a"])->svalue) == 2);
+    }
+
+    SECTION( "Duplicate Key overwrite simple -> arr" ) {
+        HParser parser1 = initWithString("val = 1\nval =[2]");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root1->members["val"])->elements[0])->svalue) == 2);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[0].second)->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(parser1.stack[1].second)->elements[0])->svalue) == 2);
+    }
+
+    SECTION( "Duplicate Key overwrite arr -> simple" ) {
+        HParser parser1 = initWithString("val = [2]\nval =1");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root1->members["val"])->svalue) == 1);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(parser1.stack[0].second)->elements[0])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[1].second)->svalue) == 1);
+    }
+
+    SECTION( "Duplicate Key overwrite obj -> simple" ) {
+        HParser parser1 = initWithString("val = {a = 1}\nval =2");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root1->members["val"])->svalue) == 2);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[0].second)->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser1.stack[1].second)->members["a"])->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[2].second)->svalue) == 2);
+    }
+
+    SECTION( "Duplicate Key overwrite arr -> obj" ) {
+        HParser parser1 = initWithString("val = [2]\nval = {a = 1}");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["val"])->members["a"])->svalue) == 1);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(parser1.stack[0].second)->elements[0])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[1].second)->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser1.stack[2].second)->members["a"])->svalue) == 1);
+    }
+
+    SECTION( "Duplicate Key overwrite obj -> arr" ) {
+        HParser parser1 = initWithString("val = {a = 1}\nval =[2]");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root1->members["val"])->elements[0])->svalue) == 2);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(parser1.stack[2].second)->elements[0])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser1.stack[0].second)->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser1.stack[1].second)->members["a"])->svalue) == 1);
+    }
+
+    SECTION( "Duplicate Key overwrite arr -> arr" ) {
+        HParser parser1 = initWithString("val = [1]\nval =[2]");
+        parser1.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root1->members["val"])->elements[0])->svalue) == 2);
+        REQUIRE(root1->members.size() == 1);
+        REQUIRE(root1->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(parser1.stack[0].second)->elements[0])->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(parser1.stack[1].second)->elements[0])->svalue) == 2);
+    }
+
+
+    SECTION( "Object Merging" ) {
+        HParser parser = initWithString("a = {b = 2, c = 3}\na = {b = 3, d = 10}");
+        parser.parseTokens();
+        HTree* root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 1);
+        REQUIRE(root->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["b"])->svalue) == 3);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["c"])->svalue) == 3);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["d"])->svalue) == 10);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser.stack[0].second)->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser.stack[1].second)->svalue) == 3);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser.stack[2].second)->members["b"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser.stack[2].second)->members["c"])->svalue) == 3);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser.stack[3].second)->svalue) == 3);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(parser.stack[4].second)->svalue) == 10);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser.stack[5].second)->members["b"])->svalue) == 3);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(parser.stack[5].second)->members["d"])->svalue) == 10);
+    }
 }
 
 TEST_CASE( "Array concatenation" ) {
-
+    SECTION( "Simple concatenation" ) {
+        HParser parser = initWithString("a = [1] [2] [3]");
+        parser.parseTokens();
+        HTree* root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 1);
+        REQUIRE(root->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root->members["a"])->elements[0])->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root->members["a"])->elements[1])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(root->members["a"])->elements[2])->svalue) == 3);
+    }
 }
 
 TEST_CASE( "Paths as Keys" ) {
@@ -310,10 +489,6 @@ TEST_CASE( "Substitutions" ) {
     //optional
     //cycle handling
 }
-
-// ----------------------------------- lexer ------------------------------------
-
-// each token type
 
 // --------------------------------- configfile ---------------------------------
 
