@@ -90,7 +90,7 @@ void ConfigFile::runFile() {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
         return;
     }
-
+    parser->getStack();
     parser->resolveSubstitutions();
     if (!parser->validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;

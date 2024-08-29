@@ -550,12 +550,45 @@ TEST_CASE( "Substitutions" ) {
         parser1.parseTokens();
         parser1.resolveSubstitutions();
         REQUIRE(parser1.validConf == false);
+        HParser parser2 = initWithString("a : { b : ${a} }");
+        parser2.parseTokens();
+        parser2.resolveSubstitutions();
+        REQUIRE(parser2.validConf == false);
     }
-    //string preserve whitespace   
-    //self-referential
+
+    SECTION( "string substitutions preserve whitespace" ) {
+        HParser parser = initWithString("a = 2 before \n b = ${a} ${c} word \n c = after");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["a"])->svalue) == "2 before");
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["b"])->svalue) == "2 before after word");
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["c"])->svalue) == "after");
+    }
+   
+    SECTION( "self referential substitutions" ) {
+        HParser parser = initWithString("foo : { a : { c : 1 } } \n foo : ${foo.a}\nfoo : { a : 2 }");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["foo"])->members["a"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["foo"])->members["c"])->svalue) == 1);
+
+        HParser parser1 = initWithString("bar : { foo : 42, baz : ${bar.foo}} \nbar : { foo : 43 }");
+        parser1.parseTokens();
+        parser1.resolveSubstitutions();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["bar"])->members["baz"])->svalue) == 43);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["bar"])->members["foo"])->svalue) == 43);
+
+        HParser parser2 = initWithString("a = ${?a} foo");
+        parser2.parseTokens();
+        parser2.resolveSubstitutions();
+        HTree * root2 = std::get<HTree*>(parser2.rootObject);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root2->members["a"])->svalue) == "foo");
+    }
     //recursive object
     //optional
-    //cycle handling
 }
 
 // --------------------------------- configfile ---------------------------------
