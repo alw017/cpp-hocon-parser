@@ -212,7 +212,7 @@ TEST_CASE( "hoconArraySubTree" ) {
     REQUIRE(std::get<int>(std::get<HSimpleValue*>(obj->members["a"])->svalue) == 1);
 }
 
-// ----------------------------------- parser -----------------------------------
+// ----------------------------------- integration tests -----------------------------------
 
 TEST_CASE( "Test Include" ) {
     SECTION( "File Test" ) {
@@ -244,6 +244,23 @@ TEST_CASE( "Test Include" ) {
         parser.resolveSubstitutions();
         HTree * rootObj = std::get<HTree*>(parser.rootObject);
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["includedFile"])->members["a"])->svalue) == "achievedValue");
+    }
+
+    SECTION( "include file with obj substitution" ) {
+        HParser parser = initWithString("{ refToOtherFile = { a = 2, b = ${otherValue} }, otherValue = 6, includedFile = { include file(\"../tests/test_include_file_with_sub.conf\") }}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(std::get<HTree*>(rootObj->members["includedFile"])->members["a"])->members["b"])->svalue) == 6);
+    }
+
+
+    SECTION( "include file resolves substitutions locally before looking in the global stack" ) {
+        HParser parser = initWithString("b = 4, c = {include file(\"../tests/test_include_file_with_local_sub.conf\")}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["c"])->members["a"])->svalue) == 2);
     }
 
     SECTION( "include file with include" ) {
@@ -506,11 +523,34 @@ TEST_CASE( "Paths as Keys" ) {
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["b"])->svalue) == 2);
     }
 
-    // "" should be invalid
+    SECTION( "empty string as part of path is invalid" ) {
+        HParser parser = initWithString("a.\"\".b = 2");
+        parser.parseTokens();
+        REQUIRE(parser.validConf == false);
+    }
 }
 
 TEST_CASE( "Substitutions" ) {
-    //normal
+    
+    SECTION( "normal case substitutions" ) {
+        HParser parser = initWithString("a = 2\n b = ${a}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["a"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["b"])->svalue) == 2);
+    }
+
+    SECTION( "cycles terminate instead of looping" ) {
+        HParser parser = initWithString("a = ${b}\n b =${a}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        REQUIRE(parser.validConf == false);
+        HParser parser1 = initWithString("b =${b}");
+        parser1.parseTokens();
+        parser1.resolveSubstitutions();
+        REQUIRE(parser1.validConf == false);
+    }
     //string preserve whitespace   
     //self-referential
     //recursive object

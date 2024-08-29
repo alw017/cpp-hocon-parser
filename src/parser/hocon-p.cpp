@@ -1380,7 +1380,6 @@ std::vector<std::string> HParser::hoconKey() {
     ignoreAllWhitespace();
     std::vector<Token> keyTokens = std::vector<Token>();
     std::stringstream ss {""};
-    
     while(check(SIMPLE_VALUES) || check(WHITESPACE)) {
         keyTokens.push_back(advance());
     } // newline implies one of { : =, otherwise it's an error. left brace is implicit separator.
@@ -1397,7 +1396,14 @@ std::vector<std::string> HParser::hoconKey() {
         return std::vector<std::string>();
     }
     //return ss.str();
-    return splitPath(keyTokens);
+    std::vector<std::string> out = splitPath(keyTokens);
+    for (auto str : out) {
+        if (str == "") {
+            error(peek().line, "cannot use the empty string \"\" as a key or a path");
+            return std::vector<std::string>();
+        }
+    }
+    return out;
 }
 
 /* 
@@ -1907,7 +1913,8 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                     HSubstitution * nextRes = std::get<HSubstitution*>(res);
                     if (history.count(nextRes)) {
                         error(0, "cycle detected, the substitution with path " + pathToString(nextRes->getPath()) + " was visited twice.");
-                        break;
+                        set.erase(sub);
+                        return new HTree();
                     } else {
                         history.insert(sub);
                         res = resolveSub(nextRes, set, history);
@@ -1947,7 +1954,8 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                 }
             } else {
                 error(0, "non-optional substitution with path \"" + pathToString(path->path) + "\" and counter=" + std::to_string(path->counter) + " failed to resolve" + (path->isSelfReference()? " selfref" : " rootref"));
-                break;
+                set.erase(sub);
+                return new HTree();
                 //return new HSimpleValue("resolve failed", std::vector<Token>{Token(UNQUOTED_STRING, "resolve failed", "resolve failed", 0)});
             }
             concatValue = concatSubValue(concatValue, res, sub->interrupts[i]);
