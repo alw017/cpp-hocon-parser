@@ -121,7 +121,7 @@ TEST_CASE( "hoconKey" ) {
     }
 }
 
-TEST_CASE( "hoconTree" ) {
+TEST_CASE( "Omitted root brace/hoconTree" ) {
     SECTION("simple case") {
         HParser parser = initWithString("{a = b}");
         parser.parseTokens();
@@ -209,7 +209,7 @@ TEST_CASE( "Test Include" ) {
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(rootObj->members["a"])->svalue) == 2);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["b"])->members["c"])->svalue) == 2);
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["b"])->members["d"])->svalue) == "value");
-    }
+    } 
 
     SECTION( "File Test not required" ) {
         HParser parser = initWithString("b = [a,{ include file(\"../tests/test_i\") }]");
@@ -228,16 +228,62 @@ TEST_CASE( "Test Include" ) {
     }
 }
 
-TEST_CASE( "Test Comments" ) {
-
-}
-
-TEST_CASE( "Omitted Root Brace" ) {
-
-}
-
 TEST_CASE( "Key-value separators" ) {
+    SECTION( "Typical case" ) {
+        HParser parser = initWithString("a = 2\nb:1\n c={d:2}\nd:{c=1}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(rootObj->members["a"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(rootObj->members["b"])->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["c"])->members["d"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["d"])->members["c"])->svalue) == 1);
+    }
 
+    SECTION( "Implied Separator" ) {
+        HParser parser = initWithString("c{d:2}\nd{c=1}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * rootObj = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["c"])->members["d"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(rootObj->members["d"])->members["c"])->svalue) == 1);
+    }
+}
+
+TEST_CASE( "Test Comments" ) {
+    SECTION( "Head Comment" ) {
+        HParser parser1 = initWithString("// this is a comment before the root\ntest = 2");
+        HParser parser2 = initWithString("# this is a comment before the root obj braces \n {a = 2, b = 3}");
+        parser1.parseTokens();
+        parser2.parseTokens();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        HTree * root2 = std::get<HTree*>(parser2.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root1->members["test"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root2->members["a"])->svalue) == 2);
+    }
+
+    SECTION( "Comment after member definition" ) {
+        HParser parser = initWithString("{ // test \n c=2,//comment 2\n d = value # comment 3\n}");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["c"])->svalue) == 2);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["d"])->svalue) == "value");
+    }
+
+    SECTION( "Comments between keyvalue separators" ) {
+        HParser parser = initWithString("{\n c // comment here \n=2, \n d = //another comment \n 2}");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["c"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(root->members["d"])->svalue) == 2);
+    }
+
+    SECTION( "Comments between shorthand obj definition" ) {
+        HParser parser = initWithString("{ obj #comment\n {a = 2}}");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["obj"])->members["a"])->svalue) == 2);
+    }
 }
 
 TEST_CASE( "Commas" ) {

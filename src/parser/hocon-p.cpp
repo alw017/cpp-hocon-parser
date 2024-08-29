@@ -917,6 +917,7 @@ HTree * HParser::rootTree() {
             delete output;
             return includedTree;
         }
+        ignoreAllWhitespace();
         if (match(LEFT_BRACE)) { // implied separator case. ex: foo {}
             HTree * obj = mergeAdjacentTrees(rootPath);
             if(check(SUB) || check(SUB_OPTIONAL)) {
@@ -1040,7 +1041,7 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
         } else {
             target = output;
         }
-        
+        ignoreAllWhitespace();
         if (match(LEFT_BRACE)) {            // implied separator case. ex: foo {}
             HTree * obj = mergeAdjacentTrees(rootPath);
             if(check(SUB) || check(SUB_OPTIONAL)) {
