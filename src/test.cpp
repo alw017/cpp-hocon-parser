@@ -478,7 +478,35 @@ TEST_CASE( "Array concatenation" ) {
 }
 
 TEST_CASE( "Paths as Keys" ) {
+    SECTION ( "simple case" ) {
+        HParser parser = initWithString("a.b = 2");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 1);
+        REQUIRE(root->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["b"])->svalue) == 2);
+    }
 
+    SECTION( "add member to object" ) {
+        HParser parser = initWithString("a = {b = 1}\n a.c = 2");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 1);
+        REQUIRE(root->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["b"])->svalue) == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["c"])->svalue) == 2);
+    }
+
+    SECTION( "overwrite member in object" ) {
+        HParser parser = initWithString("a = {b = 1}\n a.b = 2");
+        parser.parseTokens();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 1);
+        REQUIRE(root->memberOrder.size() == 1);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["a"])->members["b"])->svalue) == 2);
+    }
+
+    // "" should be invalid
 }
 
 TEST_CASE( "Substitutions" ) {
