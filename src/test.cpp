@@ -580,6 +580,66 @@ TEST_CASE( "Substitutions" ) {
         HTree * root1 = std::get<HTree*>(parser1.rootObject);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["bar"])->members["baz"])->svalue) == 43);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["bar"])->members["foo"])->svalue) == 43);
+    }
+    
+    SECTION( "Recursive object resolving" ) {
+        HParser parser = initWithString("a = {b = 2, c = ${ref}} \n b = ${a} \n ref = test");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["b"])->members["c"])->svalue) == "test");
+    }
+    
+    SECTION( "Optional Substitutions" ) {
+        HParser parser = initWithString("a = ${?nonexistent.path}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 0);
+    }
+}
+
+TEST_CASE( "Optional Substitutions" ) {
+    
+    SECTION( "Optional Substitutions normal case" ) {
+        HParser parser = initWithString("a = ${?nonexistent.path}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(root->members.size() == 0);
+    }
+
+    SECTION( "cycles terminate instead of looping" ) {
+        HParser parser = initWithString("a = ${?b}\n b =${?a}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        REQUIRE(parser.validConf == false);
+    }
+
+    SECTION( "string substitutions preserve whitespace" ) {
+        HParser parser = initWithString("a = 2 before \n b = ${?a} ${?c} word \n c = after");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["a"])->svalue) == "2 before");
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["b"])->svalue) == "2 before after word");
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root->members["c"])->svalue) == "after");
+    }
+   
+    SECTION( "self referential substitutions" ) {
+        HParser parser = initWithString("foo : { a : { c : 1 } } \n foo : ${?foo.a}\nfoo : { a : 2 }");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["foo"])->members["a"])->svalue) == 2);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["foo"])->members["c"])->svalue) == 1);
+
+        HParser parser1 = initWithString("bar : { foo : 42, baz : ${?bar.foo}} \nbar : { foo : 43 }");
+        parser1.parseTokens();
+        parser1.resolveSubstitutions();
+        HTree * root1 = std::get<HTree*>(parser1.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["bar"])->members["baz"])->svalue) == 43);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HTree*>(root1->members["bar"])->members["foo"])->svalue) == 43);
 
         HParser parser2 = initWithString("a = ${?a} foo");
         parser2.parseTokens();
@@ -587,9 +647,27 @@ TEST_CASE( "Substitutions" ) {
         HTree * root2 = std::get<HTree*>(parser2.rootObject);
         REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(root2->members["a"])->svalue) == "foo");
     }
-    //recursive object
-    //optional
+    
+    SECTION( "Recursive object resolving" ) {
+        HParser parser = initWithString("a = {b = 2, c = ${?ref}} \n b = ${?a} \n ref = test");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<std::string>(std::get<HSimpleValue*>(std::get<HTree*>(root->members["b"])->members["c"])->svalue) == "test");
+    }
 }
+
+TEST_CASE( "Merging Substitutions" ) {
+    SECTION( "" ) {
+        HParser parser = initWithString("base { }\nfoo = ${base} { a { b = 1 }, c = [${foo.a.b}]}");
+        parser.parseTokens();
+        parser.resolveSubstitutions();
+        HTree * root = std::get<HTree*>(parser.rootObject);
+        REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(std::get<HTree*>(root->members["foo"])->members["c"])->elements[0])->svalue) == 1);
+    }
+}
+
+
 
 // --------------------------------- configfile ---------------------------------
 

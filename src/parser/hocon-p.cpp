@@ -1926,7 +1926,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                 std::unordered_set<HSubstitution*> subs = std::visit(getSubstitutions, res);
                 if (!subs.empty()) {
                     HTree * t = std::get<HTree*>(res);
-                    resolveObj(res, history);
+                    //resolveObj(res, history);
                 }
                 // case where the path resolves to substitution which resolves in to a simple value
                 if (std::holds_alternative<HSimpleValue*>(res)) { // delete existing trailing path whitespace and add the current path's interrim whitespace to the resolved Value.
