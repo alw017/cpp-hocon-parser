@@ -325,7 +325,9 @@ void HTree::mergeTrees(HTree * second) {
         if (members.count(pair.first) == 0) { // not exist case;
             addMember(pair.first, std::visit(getDeepCopy, pair.second));
         } else if (std::holds_alternative<HTree*>(members[pair.first]) && std::holds_alternative<HTree*>(pair.second)) { // exists, both objects
-            std::get<HTree*>(members[pair.first])->mergeTrees(std::get<HTree*>(std::visit(getDeepCopy, pair.second)));
+            HTree * obj = std::get<HTree*>(std::visit(getDeepCopy, pair.second));
+            std::get<HTree*>(members[pair.first])->mergeTrees(obj);
+            delete obj;
         } else { // exists but not both objects
             //std::visit(deleteHObj, members[pair.first]);
             addMember(pair.first, std::visit(getDeepCopy, pair.second));
@@ -629,11 +631,6 @@ std::string HSubstitution::str() {
         }
     } else {
         out = "";
-    }
-    if (true) {
-        std::vector<std::string> path = getPath();
-        out += " --- ";
-        out += pathToString(path);
     }
     //out += " stack counter = " + std::to_string(counter);
     
