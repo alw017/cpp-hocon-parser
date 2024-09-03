@@ -667,6 +667,50 @@ std::vector<std::string> HSubstitution::getPath() {
     return parentPath;
 }
 
+class LinkedList{
+    // Struct inside the class LinkedList
+    // This is one node which is not needed by the caller. It is just
+    // for internal work.
+    struct Node {
+        std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj;
+        Node *next;
+        Node *prev;
+
+        ~Node() {
+            std::visit(deleteHObj, obj);
+        }
+    };
+
+// public member
+public:
+    // constructor
+    LinkedList(){
+        head = nullptr;
+    }
+
+    // destructor
+    ~LinkedList(){
+        Node *next = head;
+        
+        while(next) {              // iterate over all elements
+            Node *deleteMe = next;
+            next = next->next;     // save pointer to the next element
+            delete deleteMe;       // delete the current entry
+        }
+    }
+    
+    // This prepends a new value at the beginning of the list
+    void appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val){
+        Node *n = new Node();   // create new Node
+        n->obj = val;             // set value
+        n->next = head;         // make the node point to the next node.
+                                //  If the list is empty, this is NULL, so the end of the list --> OK
+        head = n;               // last but not least, make the head point at the new node.
+    }
+
+    Node * head; 
+};
+
 HParser::HParser(HTree * newRoot) {
     rootObject = newRoot->deepCopy();
 }
