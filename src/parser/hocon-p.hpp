@@ -128,7 +128,7 @@ class HParser {
         bool atEnd();
         void getStack();
         void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
-        void insertHistory(std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list, size_t counter); // the stack isn't really a stack at this point...
+        void insertHistory(std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>>::iterator iter, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list); // the stack isn't really a stack at this point...
         void convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> & list, std::vector<std::string> path);
 
         //consume
