@@ -658,15 +658,13 @@ TEST_CASE( "Optional Substitutions" ) {
 }
 
 TEST_CASE( "Merging Substitutions" ) {
-    SECTION( "merging an object with a substitution into a substitution" ) {
+    SECTION( "" ) {
         HParser parser = initWithString("base { }\nfoo = ${base} { a { b = 1 }, c = [${foo.a.b}]}");
         parser.parseTokens();
         parser.resolveSubstitutions();
         HTree * root = std::get<HTree*>(parser.rootObject);
         REQUIRE(std::get<int>(std::get<HSimpleValue*>(std::get<HArray*>(std::get<HTree*>(root->members["foo"])->members["c"])->elements[0])->svalue) == 1);
     }
-
-    
 }
 
 
