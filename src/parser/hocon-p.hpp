@@ -128,7 +128,8 @@ class HParser {
         bool atEnd();
         void getStack();
         void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
-        void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value, HSubstitution *);
+        void insertHistory(std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>>::iterator iter, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list); // the stack isn't really a stack at this point...
+        void convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> & list, std::vector<std::string> path);
 
         //consume
         Token advance();
@@ -177,17 +178,14 @@ class HParser {
         std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePath(HPath* path);
         std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> concatSubValue(std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> source, std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> target, bool interrupt);
         std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePrevValue(int counter, std::vector<std::string> path);
-        /*
-         * Note: to do substitutions, we need to keep an auxillary file keeping track of all object member additions and modifications
-         * also, we need to give the substitution a handle on where to enter the file, if it is a self referential substitution.
-         */
 
         //substitution resolving helper methods
 
         //error reporting
         void error(int line, std::string const& message);
         void report(int line, std::string const& where, std::string const& message);
-    public:
+
+
         bool run(); 
         HParser(std::vector<Token> tokens): tokenList(tokens), length(tokens.size()) {};
         HParser(HTree * newRoot);

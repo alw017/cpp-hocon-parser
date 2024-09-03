@@ -91,7 +91,22 @@ void ConfigFile::runFile() {
         return;
     }
     parser->getStack();
+
+    //test method start:
+    /*std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> wrapper;
+    if(std::holds_alternative<HTree*>(parser->rootObject)) {
+        wrapper = std::get<HTree*>(parser->rootObject);
+    } else {
+        wrapper = std::get<HArray*>(parser->rootObject);
+    }
+    std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
+    parser->convertToStack(wrapper, list, std::vector<std::string>());
+    parser->stack.insert(parser->stack.end(), list.begin(), list.end());
+    parser->getStack(); */
+    //end
+
     parser->resolveSubstitutions();
+    parser->getStack();
     if (!parser->validConf) {
         std::cout << "Invalid Configuration, Aborted" << std::endl;
         return;

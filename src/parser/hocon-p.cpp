@@ -540,6 +540,7 @@ std::string HPath::str() {
     if(debug && parent){
         out += " - path: " + pathToString(parent->getPath());
     }
+
     return out;
 }
 
@@ -630,11 +631,7 @@ std::string HSubstitution::str() {
     } else {
         out = "";
     }
-    if (true) {
-        std::vector<std::string> path = getPath();
-        out += " --- ";
-        out += pathToString(path);
-    }
+    
     //out += " stack counter = " + std::to_string(counter);
     
     if(debug) {
@@ -756,6 +753,20 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
         handle = std::get<HSubstitution*>(temp);
     }
     stack.push_back(std::make_pair(path, temp)); // leave it for now, a potential fix if this causes memory issues is creating a new tree that points to earlier copies in the stack, instead of creating a new deep copy.
+}
+
+void HParser::convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>>& list, std::vector<std::string> path) {
+    if (std::holds_alternative<HTree*>(obj)) {
+        HTree * curr = std::get<HTree*>(obj);
+            for(auto pair : curr->members) {
+                std::vector<std::string> memberPath = path;
+                memberPath.push_back(pair.first);
+                convertToStack(pair.second, list, memberPath);
+            }
+        list.push_back(std::make_pair(path, std::visit(getDeepCopy, obj)));
+    } else  {
+        list.push_back(std::make_pair(path, std::visit(getDeepCopy, obj)));
+    }
 }
 
 // consume helper methods
@@ -2010,12 +2021,14 @@ void HParser::resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitut
 
 std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePath(HPath* path) {
     //std::cout << path->str() << std::endl;
+    //std::cout << "=================RESOLVEPATHSTART===================" << std::endl;
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
     auto it = stack.rbegin();
-    if (path->isSelfReference()) { // handle unset counter here.
-        //std::cout << path->str() << " is a self ref" << std::endl;
-        it = stack.rend() - path->counter;
+    if (path->isSelfReference()) {
+        it = stack.rend() - path->counter; // positions the iterator at the element right before the value indexed by counter (the original self-reference).
+        //std::cout << std::visit(stringify, it->second) << std::endl;
     }
+    //std::cout << "=================RESOLVEPATHEND===================" << std::endl;
     for (it; it != stack.rend(); it++) {
         if(path->path == it->first) {
             if (std::holds_alternative<HSubstitution*>(it->second)) {
@@ -2032,6 +2045,22 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
                     if (path->suffixWhitespace != "") temp->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0)); // might not be correct formatting for whitespace tokens.
                 }
             }
+            auto iter = stack.begin() + path->counter + 1;
+            std::vector<std::string> absolutePath = path->parent->getPath();
+            std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
+            convertToStack(out, list, absolutePath);
+            // update any counters after insertion
+
+            size_t listSize = list.size();
+            for (auto postInsertIter = stack.begin() + path->counter + listSize + 1; postInsertIter != stack.end(); postInsertIter++) {
+                if(std::holds_alternative<HSubstitution*>(postInsertIter->second)) {
+                    HSubstitution * curr = std::get<HSubstitution*>(postInsertIter->second);
+                    for (auto path : curr->paths) {
+                        path->counter += listSize;
+                    }
+                }
+            }
+            stack.insert(iter, list.begin(), list.end());
             return out;
         }
     }
