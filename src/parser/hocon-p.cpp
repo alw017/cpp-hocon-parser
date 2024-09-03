@@ -752,6 +752,43 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
     stack.push_back(std::make_pair(path, temp)); // leave it for now, a potential fix if this causes memory issues is creating a new tree that points to earlier copies in the stack, instead of creating a new deep copy.
 }
 
+void HParser::insertHistory(std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list, size_t counter) {
+    auto iter = stack.begin() + counter + 1;
+    // update any counters after insertion
+
+    // updating stack counters
+    size_t listSize = list.size();
+    if (listSize + counter + 1 < stack.size()) { // catches the edge case where a substitution is the last line in a .conf file.
+        for (auto postInsertIter = stack.begin() + counter + listSize + 1; postInsertIter != stack.end(); postInsertIter++) {
+            if(std::holds_alternative<HSubstitution*>(postInsertIter->second)) {
+                HSubstitution * curr = std::get<HSubstitution*>(postInsertIter->second);
+                for (auto path : curr->paths) {
+                    path->counter += listSize;
+                }
+            }
+        }
+    }
+    
+    std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> wrapper;
+    if (std::holds_alternative<HTree*>(rootObject)) {
+        wrapper = std::get<HTree*>(rootObject);
+    } else {
+        wrapper = std::get<HArray*>(rootObject);
+    }
+
+    //updating tree counters
+    auto substitutionList = std::visit(getSubstitutions, wrapper);
+    for(auto sub : substitutionList) {
+        for (auto subPath : sub->paths) {
+            if (subPath->counter > counter) {
+                subPath->counter += listSize;
+            }
+        }
+    }
+    
+    stack.insert(iter, list.begin(), list.end());
+}
+
 void HParser::convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>>& list, std::vector<std::string> path) {
     if (std::holds_alternative<HTree*>(obj)) {
         HTree * curr = std::get<HTree*>(obj);
@@ -1967,6 +2004,43 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                 //return new HSimpleValue("resolve failed", std::vector<Token>{Token(UNQUOTED_STRING, "resolve failed", "resolve failed", 0)});
             }
             concatValue = concatSubValue(concatValue, res, sub->interrupts[i]);
+            auto iter = stack.begin() + path->counter + 1;
+            std::vector<std::string> absolutePath = path->parent->getPath();
+            std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
+            convertToStack(concatValue, list, absolutePath);
+            // update any counters after insertion
+
+            // updating stack counters
+            size_t listSize = list.size();
+            if (path->counter < stack.size()) { // catches the edge case where a substitution is the last line in a .conf file.
+                for (auto postInsertIter = stack.begin() + path->counter; postInsertIter != stack.end(); postInsertIter++) {
+                    if(std::holds_alternative<HSubstitution*>(postInsertIter->second)) {
+                        HSubstitution * curr = std::get<HSubstitution*>(postInsertIter->second);
+                        for (auto path : curr->paths) {
+                            path->counter += listSize;
+                        }
+                    }
+                }
+            }
+            
+            std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> wrapper;
+            if (std::holds_alternative<HTree*>(rootObject)) {
+                wrapper = std::get<HTree*>(rootObject);
+            } else {
+                wrapper = std::get<HArray*>(rootObject);
+            }
+
+            //updating tree counters
+            auto substitutionList = std::visit(getSubstitutions, wrapper);
+            for(auto sub : substitutionList) {
+                for (auto subPath : sub->paths) {
+                    if (subPath->counter >= path->counter) {
+                        subPath->counter += listSize;
+                    }
+                }
+            }
+            
+            stack.insert(iter, list.begin(), list.end());
         } else {
             std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> temp;
             switch(value.index()) {
@@ -1987,6 +2061,44 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
             }
             if (std::visit(valueExists, temp)) {
                 concatValue = concatSubValue(concatValue, temp, sub->interrupts[i]);
+                HPath * path = sub->paths[0];
+                auto iter = stack.begin() + path->counter + 1;
+                std::vector<std::string> absolutePath = path->parent->getPath();
+                std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
+                convertToStack(concatValue, list, absolutePath);
+                // update any counters after insertion
+
+                // updating stack counters
+                size_t listSize = list.size();
+                if (path->counter < stack.size()) { // catches the edge case where a substitution is the last line in a .conf file.
+                    for (auto postInsertIter = stack.begin() + path->counter; postInsertIter != stack.end(); postInsertIter++) {
+                        if(std::holds_alternative<HSubstitution*>(postInsertIter->second)) {
+                            HSubstitution * curr = std::get<HSubstitution*>(postInsertIter->second);
+                            for (auto path : curr->paths) {
+                                path->counter += listSize;
+                            }
+                        }
+                    }
+                }
+                
+                std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> wrapper;
+                if (std::holds_alternative<HTree*>(rootObject)) {
+                    wrapper = std::get<HTree*>(rootObject);
+                } else {
+                    wrapper = std::get<HArray*>(rootObject);
+                }
+
+                //updating tree counters
+                auto substitutionList = std::visit(getSubstitutions, wrapper);
+                for(auto sub : substitutionList) {
+                    for (auto subPath : sub->paths) {
+                        if (subPath->counter >= path->counter) {
+                            subPath->counter += listSize;
+                        }
+                    }
+                }
+                
+                stack.insert(iter, list.begin(), list.end());
             }
         }
     }
@@ -2042,43 +2154,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
                     if (path->suffixWhitespace != "") temp->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0)); // might not be correct formatting for whitespace tokens.
                 }
             }
-            auto iter = stack.begin() + path->counter + 1;
-            std::vector<std::string> absolutePath = path->parent->getPath();
-            std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
-            convertToStack(out, list, absolutePath);
-            // update any counters after insertion
-
-            // updating stack counters
-            size_t listSize = list.size();
-            if (listSize + path->counter + 1 < stack.size()) { // catches the edge case where a substitution is the last line in a .conf file.
-                for (auto postInsertIter = stack.begin() + path->counter + listSize + 1; postInsertIter != stack.end(); postInsertIter++) {
-                    if(std::holds_alternative<HSubstitution*>(postInsertIter->second)) {
-                        HSubstitution * curr = std::get<HSubstitution*>(postInsertIter->second);
-                        for (auto path : curr->paths) {
-                            path->counter += listSize;
-                        }
-                    }
-                }
-            }
             
-            std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> wrapper;
-            if (std::holds_alternative<HTree*>(rootObject)) {
-                wrapper = std::get<HTree*>(rootObject);
-            } else {
-                wrapper = std::get<HArray*>(rootObject);
-            }
-
-            //updating tree counters
-            auto substitutionList = std::visit(getSubstitutions, wrapper);
-            for(auto sub : substitutionList) {
-                for (auto subPath : sub->paths) {
-                    if (subPath->counter > path->counter) {
-                        subPath->counter += listSize;
-                    }
-                }
-            }
-            
-            stack.insert(iter, list.begin(), list.end());
             return out;
         }
     }
