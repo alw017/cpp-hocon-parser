@@ -85,6 +85,7 @@ struct HPath {
     bool optional;
     int counter = -1;
     std::string str();
+    Node * node;
     HPath * deepCopy();
     bool isSelfReference();
 };
@@ -98,6 +99,7 @@ struct HSubstitution {
     size_t substitutionType = 3;
     std::string key;
     Node * node;
+    std::vector<Node*> historyPointers;
 
     HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> v);
     ~HSubstitution();
@@ -109,6 +111,7 @@ struct HSubstitution {
 struct Node {
     std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj;
     Node *next;
+    //Node *prev;
     std::vector<std::string> path;
 
     ~Node();
