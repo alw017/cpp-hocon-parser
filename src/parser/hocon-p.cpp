@@ -677,6 +677,9 @@ void LinkedList::appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitu
     n->obj = val;             // set value
     n->next = head;         // make the node point to the next node.
     n->path = path;
+    if (n->next == nullptr) {
+        tail = n;
+    }
                             //  If the list is empty, this is NULL, so the end of the list --> OK
     head = n;               // last but not least, make the head point at the new node.
 }
@@ -786,6 +789,7 @@ void HParser::addToHistory(std::vector<std::string> path, std::variant<HTree*,HA
     if(std::holds_alternative<HSubstitution*>(value)) {
         HSubstitution* sub = std::get<HSubstitution*>(value); 
         sub->node = history.head;
+        std::get<HSubstitution*>(history.head->obj)->node = history.head;
     }
 }
 
@@ -1241,7 +1245,7 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
 /* 
     assume you have just consumed the left bracket. consumes the right bracket token.
 */
-HArray * HParser::hoconArray() {
+HArray * HParser::hoconArray() { 
     HArray * output = new HArray();
     while(!match(RIGHT_BRACKET)) { // loop through members, assumption is that the current token is the first token for a given value.
         if(atEnd()) {
@@ -1252,6 +1256,7 @@ HArray * HParser::hoconArray() {
             HTree * obj = mergeAdjacentArraySubTrees(); // pass in empty path here because we are not pushing objects within arrays into the stack since they do not have an accessible path.
             if(check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub;
+                // array substitutions need a handle to the history because 
                 sub = (obj != nullptr) ? parseSubstitution(obj, std::vector<std::string>(), false) : parseSubstitution(std::vector<std::string>(), false);
                 output->addElement(sub);
                 for (auto val : sub->values) {
@@ -1567,27 +1572,26 @@ HTree * HParser::parseInclude(std::vector<std::string> rootPath) {
         includeParser.parseTokens();
         int stackOffset = stack.size();
 
-        // need to set includePrefix for both the stack and the tree because they are separate objects representing the same data.
-        // by the time that we set the data in the tree, the unset version of the object was already copied to the stack.
-        for (auto pair : includeParser.stack) {
-            std::vector<std::string> resolvedIncludePath = pair.first;
-            resolvedIncludePath.insert(resolvedIncludePath.begin(), rootPath.begin(), rootPath.end());
-            if(std::holds_alternative<HSubstitution*>(pair.second)) {
-                std::get<HSubstitution*>(pair.second)->includePrefix = rootPath;
-                for(auto path : std::get<HSubstitution*>(pair.second)->paths) {
-                    path->counter += stackOffset;
-                }
-            } else if (std::holds_alternative<HTree*>(pair.second) || std::holds_alternative<HArray*>(pair.second)) {
-                for(auto sub : std::visit(getSubstitutions, pair.second)) {
+        Node * curr = includeParser.history.head;
+        while (curr) {
+            // setting up the absolute path for the included object.
+            curr->path.insert(curr->path.begin(), rootPath.begin(), rootPath.end());
+            std::vector<std::string> resolvedIncludePath = curr->path;
+
+            // adjust counter for paths in the included file
+            if(std::holds_alternative<HSubstitution*>(curr->obj)) {
+                std::get<HSubstitution*>(curr->obj)->includePrefix = rootPath;
+            } else if (std::holds_alternative<HTree*>(curr->obj) || std::holds_alternative<HArray*>(curr->obj)) { // 
+                for(auto sub : std::visit(getSubstitutions, curr->obj)) {
                     sub->includePrefix = rootPath;
-                    for(auto path : sub->paths) {
-                        path->counter += stackOffset;
-                    }
                 }
             }
-            pushStack(resolvedIncludePath, pair.second);
-            addToHistory(resolvedIncludePath, pair.second);
+            curr = curr->next;
         }
+        
+        includeParser.history.tail->next = history.head;
+        history.head = includeParser.history.head;
+
         if (std::holds_alternative<HArray*>(includeParser.rootObject)) {
             error(0, "cannot include a json file which contains an array as the root.");
             return new HTree();
@@ -1950,7 +1954,6 @@ void HParser::resolveSubstitutions() {
             std::visit(linkResolvedSub, curr->parent, keyStr, result);
         } else {
             std::variant<std::string> keyStr = curr->key;
-            HTree * debugPar = std::get<HTree*>(curr->parent);
             std::visit(deleteNullSub, curr->parent, keyStr);
         }
         delete curr;
@@ -1969,35 +1972,46 @@ std::unordered_set<HSubstitution*> HParser::getUnresolvedSubs() {
     implement resolving to environment variable in resolvePath();
     do more testing. write more tests.
 */
-std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> history) {
+std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub(HSubstitution* sub, std::unordered_set<HSubstitution*>& set, std::unordered_set<HSubstitution*> subHistory) {
     std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> concatValue;
     for (size_t i = 0; i < sub->values.size(); i++) {
         std::variant<HTree *, HArray *, HSimpleValue*, HPath*> value = sub->values[i];
-        std::string debug = std::visit(stringify, value);
+
         if (std::holds_alternative<HPath*>(value)) {
+
+            // setting up path variables for included objects.
             HPath * path = std::get<HPath*>(value);
             std::vector<std::string> oldPath = path->path;
             path->path.insert(path->path.begin(), sub->includePrefix.begin(), sub->includePrefix.end());
+            
+            // try to resolve the path normally
             std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> res = resolvePath(path);
+
+            // if doesn't exist, use the oldPath if it was an included object.
             if (!std::visit(valueExists, res) && !sub->includePrefix.empty()) {
                 path->path = oldPath;
                 res = resolvePath(path);
             }
+
+            // next check the environment for stored values.
             std::string envVar = getEnvVar(pathToString(path->path));
             if (envVar != "" && !std::visit(valueExists, res)) { // if no path resolves, look in the environment variables.
                 res = new HSimpleValue(envVar, std::vector<Token>{Token(UNQUOTED_STRING, envVar, envVar, 0)}, 1);
             }
+
+            // in the case that any of these methods work
             if (std::visit(valueExists, res)) {
-                //std::cout << pathToString(std::get<HPath*>(value)->path) << " resolved to \"" << std::visit(stringify, res) << "\""<< std::endl;
+
+                //
                 if (std::holds_alternative<HSubstitution*>(res)) {
                     HSubstitution * nextRes = std::get<HSubstitution*>(res);
-                    if (history.count(nextRes)) {
+                    if (subHistory.count(nextRes)) {
                         error(0, "cycle detected, the substitution with path " + pathToString(nextRes->getPath()) + " was visited twice.");
                         set.erase(sub);
                         return new HTree();
                     } else {
-                        history.insert(sub);
-                        res = resolveSub(nextRes, set, history);
+                        subHistory.insert(sub);
+                        res = resolveSub(nextRes, set, subHistory);
                     }
                 }
                 std::variant<std::string> keyWrapper = sub->key;
@@ -2017,27 +2031,33 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                     curr->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0));
                 }
                 //return res;
-            } else if (path->optional) { // try to resolve to a previously defined value, otherwise do not add the value
-                res = resolvePrevValue(path->counter, sub->getPath());
+            } else if (path->optional) { // if none of the attempted methods worked, and the path is optional, attempt to resolve to a previous value set by the user.
+                res = resolvePrevValue(path, sub->getPath());
+
+                //if a previous value is found
                 if (std::visit(valueExists, res)) {
                     if (std::holds_alternative<HSubstitution*>(res)) {
+
+                        // check for cycle.
                         HSubstitution * nextRes = std::get<HSubstitution*>(res);
-                        if (history.count(nextRes)) {
+                        if (subHistory.count(nextRes)) {
                             error(0, "cycle detected, the substitution with path " + pathToString(nextRes->getPath()) + " was visited twice.");
-                        } else {
-                            history.insert(sub);
-                            res = resolveSub(nextRes, set, history);
+                        } else { // if no cycle, resolve the substitution recursively. 
+                            subHistory.insert(sub);
+                            res = resolveSub(nextRes, set, subHistory);
                         }
                     }
                 } else {
                     continue; // skip concatenation if the value doesn't exist.
                 }
-            } else {
+            } else { // error case.
                 error(0, "non-optional substitution with path \"" + pathToString(path->path) + "\" and counter=" + std::to_string(path->counter) + " failed to resolve" + (path->isSelfReference()? " selfref" : " rootref"));
                 set.erase(sub);
                 return new HTree();
                 //return new HSimpleValue("resolve failed", std::vector<Token>{Token(UNQUOTED_STRING, "resolve failed", "resolve failed", 0)});
             }
+
+            // merge/concatenate the resolved (or null) value to the final value.
             concatValue = concatSubValue(concatValue, res, sub->interrupts[i]);
         } else {
             std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> temp;
@@ -2062,10 +2082,12 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
             }
         }
     }
+    
+    // if concatValue successfully resolved to a value at any point, check if it needs to resolve an internal substitution.
     if (std::visit(valueExists, concatValue)) {
         std::unordered_set<HSubstitution*> remainingSubs = std::visit(getSubstitutions, concatValue);
         if(!remainingSubs.empty()) {
-            resolveObj(concatValue, history);
+            resolveObj(concatValue, subHistory);
         }
     }
     set.erase(sub);
@@ -2091,12 +2113,10 @@ void HParser::resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitut
 std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePath(HPath* path) {
     //std::cout << path->str() << std::endl;
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
-    auto it = stack.rbegin();
     Node * curr = history.head;
     if (path->isSelfReference()) { // handle unset counter here.
         //std::cout << path->str() << " is a self ref" << std::endl;
-        it = stack.rend() - path->counter;
-        curr = path->parent->node;
+        curr = path->parent->node->next;
     }
     while (curr) {
         if (curr->path == path->path) {
@@ -2176,14 +2196,18 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::concatSu
 
 //need to edit here
 
-std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolvePrevValue(int counter, std::vector<std::string> path) {
+std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolvePrevValue(HPath * pathObj, std::vector<std::string> path) {
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
-    for (auto it = stack.rend() - counter; it != stack.rend(); it++) {
-        if (path == it->first) {
-            if (std::holds_alternative<HSubstitution*>(it->second)) {
-                out = it->second;
+    if(std::holds_alternative<HArray*>(pathObj->parent->parent)) { // if the parent of a substitution is an array, just return an empty object.
+        return out;
+    }
+    Node * curr = pathObj->parent->node->next;
+    while(curr) {
+        if (path == curr->path) {
+            if(std::holds_alternative<HSubstitution*>(curr->obj)) {
+                out = curr->obj;
             } else {
-                out = std::visit(getDeepCopy, it->second);
+                out = std::visit(getDeepCopy, curr->obj);
             }
             return out;
         }
