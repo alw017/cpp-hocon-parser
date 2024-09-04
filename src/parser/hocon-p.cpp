@@ -668,6 +668,19 @@ std::vector<std::string> HSubstitution::getPath() {
     return parentPath;
 }
 
+Node::~Node() {
+    std::visit(deleteHObj, obj);
+}
+
+void LinkedList::appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val, std::vector<std::string> path){
+    Node *n = new Node();   // create new Node
+    n->obj = val;             // set value
+    n->next = head;         // make the node point to the next node.
+    n->path = path;
+                            //  If the list is empty, this is NULL, so the end of the list --> OK
+    head = n;               // last but not least, make the head point at the new node.
+}
+
 HParser::HParser(HTree * newRoot) {
     rootObject = newRoot->deepCopy();
 }
@@ -732,6 +745,17 @@ void HParser::getStack() {
     }
 }
 
+void HParser::getHistory() {
+    Node * curr = history.head;
+    size_t index = 0;
+    while(curr) {
+        std::string out = pathToString(curr->path);
+        HTree * deb;
+        std::cout << " --------- [" << index++ << "] --------- \n" << out << " : " << std::visit(stringify, curr->obj) << std::endl;
+        curr = curr->next;
+    }
+}
+
 /*
     Takes a root path to the value, and a pointer to the value, and pushes it to the stack.
 */
@@ -758,12 +782,25 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
 
 void HParser::addToHistory(std::vector<std::string> path, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value) {
     std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> temp = std::visit(getDeepCopy, value);
-    history.appendValue(temp);
+    history.appendValue(temp, path);
     if(std::holds_alternative<HSubstitution*>(value)) {
         HSubstitution* sub = std::get<HSubstitution*>(value); 
         sub->node = history.head;
     }
+}
 
+void HParser::convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>>& list, std::vector<std::string> path) {
+    if (std::holds_alternative<HTree*>(obj)) {
+        HTree * curr = std::get<HTree*>(obj);
+            for(auto pair : curr->members) {
+                std::vector<std::string> memberPath = path;
+                memberPath.push_back(pair.first);
+                convertToStack(pair.second, list, memberPath);
+            }
+        list.push_back(std::make_pair(path, std::visit(getDeepCopy, obj)));
+    } else  {
+        list.push_back(std::make_pair(path, std::visit(getDeepCopy, obj)));
+    }
 }
 
 // consume helper methods
@@ -933,15 +970,19 @@ HTree * HParser::rootTree() {
                 sub = (obj != nullptr) ? parseSubstitution(obj, rootPath, true) : parseSubstitution(rootPath, true);
                 if (target->addMember(keyValue, sub)) {
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, sub);
+                    addToHistory(rootPath, sub);
                 }
             } else if (obj) {
                 //target->addMember(keyValue, obj);
                 if(target->addMember(keyValue, obj)) { // the method returns true if the passed pointer was deleted.
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, obj);
+                    addToHistory(rootPath, obj);
                 }
             } 
             consumeToNextRootMember();
@@ -955,14 +996,18 @@ HTree * HParser::rootTree() {
                     sub = (obj != nullptr) ? parseSubstitution(obj, rootPath, true) : parseSubstitution(rootPath, true);
                     if (target->addMember(keyValue, sub)) {
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, sub);
+                        addToHistory(rootPath, sub);
                     }   
                 } else if (obj) {
                     if(target->addMember(keyValue, obj)) { // the method returns true if the passed pointer was deleted.
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, obj);
+                        addToHistory(rootPath, obj);
                     }
                 }
             } else if (match(LEFT_BRACKET)) {
@@ -971,19 +1016,24 @@ HTree * HParser::rootTree() {
                     HSubstitution* sub = parseSubstitution(arr, rootPath, true);
                     if (target->addMember(keyValue, sub)) {
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, sub);
+                        addToHistory(rootPath, sub);
                     }
                 } else {
                     target->addMember(keyValue, arr);
                     pushStack(rootPath, arr);
+                    addToHistory(rootPath, arr);
                 }
             } else if (check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution(rootPath, true);
                 if (target->addMember(keyValue, sub)) {
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, sub);
+                    addToHistory(rootPath, sub);
                 }
             } else {   
                 HSimpleValue * val = hoconSimpleValue();
@@ -991,12 +1041,15 @@ HTree * HParser::rootTree() {
                     HSubstitution* sub = parseSubstitution(val, rootPath, true);
                     if (target->addMember(keyValue, sub)) {
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, sub);
+                        addToHistory(rootPath, sub);
                     }
                 } else {
                     target->addMember(keyValue, val);
                     pushStack(rootPath, val);
+                    addToHistory(rootPath, val);
                 }
             }
             if (path.size() > 1) {
@@ -1004,6 +1057,7 @@ HTree * HParser::rootTree() {
                 size_t offset = 1;
                 while (temp != output) {
                     pushStack(std::vector<std::string>(rootPath.begin(), rootPath.end() - offset), temp);
+                    addToHistory(std::vector<std::string>(rootPath.begin(), rootPath.end() - offset), temp);
                     offset++;
                     temp = std::get<HTree*>(temp->parent);
                 }
@@ -1061,15 +1115,19 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                 sub = (obj != nullptr) ? parseSubstitution(obj, rootPath, true) : parseSubstitution(rootPath, true);
                 if (target->addMember(keyValue, sub)) {
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, sub);
+                    addToHistory(rootPath, sub);
                 }
             } else if (obj) {
                 //target->addMember(keyValue, obj);
                 if(target->addMember(keyValue, obj)) { // the method returns true if the passed pointer was deleted.
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, obj);
+                    addToHistory(rootPath, obj);
                 }
             }
             consumeToNextMember();
@@ -1082,15 +1140,19 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                     sub = (obj != nullptr) ? parseSubstitution(obj, rootPath, true) : parseSubstitution(rootPath, true);
                     if (target->addMember(keyValue, sub)) {
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, sub);
+                        addToHistory(rootPath, sub);
                     }
                 } else if (obj) {
                     //target->addMember(keyValue, obj);
                     if(target->addMember(keyValue, obj)) { // the method returns true if the passed pointer was deleted.
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, obj);
+                        addToHistory(rootPath, obj);
                     }
                 }
             } else if (match(LEFT_BRACKET)) {
@@ -1099,19 +1161,24 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                     HSubstitution* sub = parseSubstitution(arr, rootPath, true);
                     if (target->addMember(keyValue, sub)) {
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, sub);
+                        addToHistory(rootPath, sub);
                     }
                 } else {
                     target->addMember(keyValue, arr);
                     pushStack(rootPath, arr);
+                    addToHistory(rootPath, arr);
                 }
             } else if (check(SUB) || check(SUB_OPTIONAL)) {
                 HSubstitution* sub = parseSubstitution(rootPath, true);
                 if (target->addMember(keyValue, sub)) {
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, sub);
+                    addToHistory(rootPath, sub);
                 }
             } else {   
                 HSimpleValue * val = hoconSimpleValue();
@@ -1119,12 +1186,15 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                     HSubstitution* sub = parseSubstitution(val, rootPath, true);
                     if (target->addMember(keyValue, sub)) {
                         pushStack(rootPath, target->members[keyValue]);
+                        addToHistory(rootPath, target->members[keyValue]);
                     } else {
                         pushStack(rootPath, sub);
+                        addToHistory(rootPath, sub);
                     }
                 } else {
                     target->addMember(keyValue, val);
                     pushStack(rootPath, val);
+                    addToHistory(rootPath, val);
                 }
             }
             if (path.size() > 1) {
@@ -1132,6 +1202,7 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                 size_t offset = 1;
                 while (temp != output) {
                     pushStack(std::vector<std::string>(rootPath.begin(), rootPath.end() - offset), temp);
+                    addToHistory(std::vector<std::string>(rootPath.begin(), rootPath.end() - offset), temp);
                     offset++;
                     temp = std::get<HTree*>(temp->parent);
                 }
@@ -1150,8 +1221,10 @@ HTree * HParser::hoconTree(std::vector<std::string> parentPath) {
                 sub->interrupts = std::vector<bool>{false, false};
                 if (target->addMember(keyValue, sub)) {
                     pushStack(rootPath, target->members[keyValue]);
+                    addToHistory(rootPath, target->members[keyValue]);
                 } else {
                     pushStack(rootPath, sub);
+                    addToHistory(rootPath, sub);
                 }
             } else {
                 error(peek().line, "Expected an array, got " + peek().lexeme);
@@ -1513,6 +1586,7 @@ HTree * HParser::parseInclude(std::vector<std::string> rootPath) {
                 }
             }
             pushStack(resolvedIncludePath, pair.second);
+            addToHistory(resolvedIncludePath, pair.second);
         }
         if (std::holds_alternative<HArray*>(includeParser.rootObject)) {
             error(0, "cannot include a json file which contains an array as the root.");
@@ -1874,14 +1948,12 @@ void HParser::resolveSubstitutions() {
         if (std::visit(valueExists, result)) {
             std::variant<std::string> keyStr = curr->key;
             std::visit(linkResolvedSub, curr->parent, keyStr, result);
-            //pushStack(curr->getPath(), result);
         } else {
             std::variant<std::string> keyStr = curr->key;
             HTree * debugPar = std::get<HTree*>(curr->parent);
             std::visit(deleteNullSub, curr->parent, keyStr);
         }
         delete curr;
-        //resolved.push_back(result);
     }
     for (auto res : resolved) {
         std::visit(deleteHObj, res);
@@ -2020,16 +2092,18 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
     //std::cout << path->str() << std::endl;
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;
     auto it = stack.rbegin();
+    Node * curr = history.head;
     if (path->isSelfReference()) { // handle unset counter here.
         //std::cout << path->str() << " is a self ref" << std::endl;
         it = stack.rend() - path->counter;
+        curr = path->parent->node;
     }
-    for (it; it != stack.rend(); it++) {
-        if(path->path == it->first) {
-            if (std::holds_alternative<HSubstitution*>(it->second)) {
-                out = it->second;
+    while (curr) {
+        if (curr->path == path->path) {
+            if(std::holds_alternative<HSubstitution*>(curr->obj)) {
+                return curr->obj;
             } else {
-                out = std::visit(getDeepCopy, it->second);
+                out = std::visit(getDeepCopy, curr->obj);
                 if (std::holds_alternative<HSimpleValue*>(out)) { // string processing for simple value case.
                     HSimpleValue * temp = std::get<HSimpleValue*>(out);
                     // disregard old trailing whitespace after defaultEnd
@@ -2039,9 +2113,10 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolvePat
                     // add new whitespace stored in HPath;
                     if (path->suffixWhitespace != "") temp->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0)); // might not be correct formatting for whitespace tokens.
                 }
+                return out;
             }
-            return out;
         }
+        curr = curr->next;
     }
     return out;
 }
@@ -2097,6 +2172,9 @@ std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::concatSu
     std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> n;
     return n;
 }
+
+
+//need to edit here
 
 std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> HParser::resolvePrevValue(int counter, std::vector<std::string> path) {
     std::variant<HTree*,HArray*, HSimpleValue*, HSubstitution*> out;

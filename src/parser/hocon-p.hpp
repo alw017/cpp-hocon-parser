@@ -15,14 +15,7 @@ enum IncludeType {
 struct HArray;
 struct HSimpleValue;
 struct HSubstitution;
-struct Node {
-    std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj;
-    Node *next;
-
-    ~Node() {
-        std::visit(deleteHObj, obj);
-    }
-};
+struct Node;
 //struct HKey;
 
 struct HTree {
@@ -113,6 +106,14 @@ struct HSubstitution {
     std::vector<std::string> getPath();
 };
 
+struct Node {
+    std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj;
+    Node *next;
+    std::vector<std::string> path;
+
+    ~Node();
+};
+
 class LinkedList{
     // Struct inside the class LinkedList
     // This is one node which is not needed by the caller. It is just
@@ -137,13 +138,7 @@ public:
     }
     
     // This prepends a new value at the beginning of the list
-    void appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val){
-        Node *n = new Node();   // create new Node
-        n->obj = val;             // set value
-        n->next = head;         // make the node point to the next node.
-                                //  If the list is empty, this is NULL, so the end of the list --> OK
-        head = n;               // last but not least, make the head point at the new node.
-    }
+    void appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val, std::vector<std::string> path);
 
     Node * head;
 
@@ -175,8 +170,10 @@ class HParser {
         //state checking
         bool atEnd();
         void getStack();
+        void getHistory();
         void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
         void addToHistory(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
+        void convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj, std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>>& list, std::vector<std::string> path);
 
         //consume
         Token advance();
