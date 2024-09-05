@@ -655,7 +655,6 @@ HSubstitution * HSubstitution::deepCopy() {
     copy->interrupts = this->interrupts;
     copy->substitutionType = this->substitutionType;
     copy->includePrefix = this->includePrefix;
-    copy->node = this->node;
     return copy;
 }
 
@@ -667,6 +666,50 @@ std::vector<std::string> HSubstitution::getPath() {
     parentPath.push_back(key);
     return parentPath;
 }
+
+class LinkedList{
+    // Struct inside the class LinkedList
+    // This is one node which is not needed by the caller. It is just
+    // for internal work.
+    struct Node {
+        std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj;
+        Node *next;
+        Node *prev;
+
+        ~Node() {
+            std::visit(deleteHObj, obj);
+        }
+    };
+
+// public member
+public:
+    // constructor
+    LinkedList(){
+        head = nullptr;
+    }
+
+    // destructor
+    ~LinkedList(){
+        Node *next = head;
+        
+        while(next) {              // iterate over all elements
+            Node *deleteMe = next;
+            next = next->next;     // save pointer to the next element
+            delete deleteMe;       // delete the current entry
+        }
+    }
+    
+    // This prepends a new value at the beginning of the list
+    void appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val){
+        Node *n = new Node();   // create new Node
+        n->obj = val;             // set value
+        n->next = head;         // make the node point to the next node.
+                                //  If the list is empty, this is NULL, so the end of the list --> OK
+        head = n;               // last but not least, make the head point at the new node.
+    }
+
+    Node * head; 
+};
 
 HParser::HParser(HTree * newRoot) {
     rootObject = newRoot->deepCopy();
@@ -754,16 +797,6 @@ void HParser::pushStack(std::vector<std::string> path, std::variant<HTree*,HArra
         handle = std::get<HSubstitution*>(temp);
     }
     stack.push_back(std::make_pair(path, temp)); // leave it for now, a potential fix if this causes memory issues is creating a new tree that points to earlier copies in the stack, instead of creating a new deep copy.
-}
-
-void HParser::addToHistory(std::vector<std::string> path, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value) {
-    std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> temp = std::visit(getDeepCopy, value);
-    history.appendValue(temp);
-    if(std::holds_alternative<HSubstitution*>(value)) {
-        HSubstitution* sub = std::get<HSubstitution*>(value); 
-        sub->node = history.head;
-    }
-
 }
 
 // consume helper methods
