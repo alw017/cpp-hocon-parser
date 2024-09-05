@@ -22,6 +22,7 @@ target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
 
 target_link_libraries(reader lexer)
 target_link_libraries(parser lexer)
+target_link_libraries(parser linkedlist)
 target_link_libraries(reader parser)
 target_link_libraries(main reader)
 target_link_libraries(main parser)
