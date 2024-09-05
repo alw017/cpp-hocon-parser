@@ -802,7 +802,7 @@ void HParser::convertToStack(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitu
                 convertToStack(pair.second, list, memberPath);
             }
         list.push_back(std::make_pair(path, std::visit(getDeepCopy, obj)));
-    } else {
+    } else  {
         list.push_back(std::make_pair(path, std::visit(getDeepCopy, obj)));
     }
 }
@@ -1797,12 +1797,11 @@ HSubstitution * HParser::parseSubstitution(std::variant<HTree*, HArray*, HSimple
             if (subType < 2) ignoreInlineWhitespace();
             else path->suffixWhitespace = check(WHITESPACE) ? advance().lexeme : "";
             values.push_back(path);
-            path->node = history.head;
         } else {
             if(subType == 3) {
                 subType = 2;
             } else if (subType != 2) {
-                error(peek().line, "substitution mismatched types, expected type " + std::to_string(subType) + " got " + std::to_string(2));
+                error(peek().line, "substitution mismatched types, expected type " + std::to_string(subType) + "got " + std::to_string(2));
                 consumeSubstitution();
                 return new HSubstitution(values);
             }
@@ -2003,7 +2002,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
             // in the case that any of these methods work
             if (std::visit(valueExists, res)) {
 
-                //cycle check
+                //
                 if (std::holds_alternative<HSubstitution*>(res)) {
                     HSubstitution * nextRes = std::get<HSubstitution*>(res);
                     if (subHistory.count(nextRes)) {
@@ -2015,13 +2014,14 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                         res = resolveSub(nextRes, set, subHistory);
                     }
                 }
-
-                // initialize new correct pointers
                 std::variant<std::string> keyWrapper = sub->key;
                 std::visit(setParentAndKey, res, sub->parent, keyWrapper);
 
                 std::unordered_set<HSubstitution*> subs = std::visit(getSubstitutions, res);
-
+                if (!subs.empty()) {
+                    HTree * t = std::get<HTree*>(res);
+                    //resolveObj(res, history);
+                }
                 // case where the path resolves to substitution which resolves in to a simple value
                 if (std::holds_alternative<HSimpleValue*>(res)) { // delete existing trailing path whitespace and add the current path's interrim whitespace to the resolved Value.
                     HSimpleValue * curr = std::get<HSimpleValue*>(res);
@@ -2030,6 +2030,7 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
                     }
                     curr->tokenParts.push_back(Token(WHITESPACE, path->suffixWhitespace, path->suffixWhitespace, 0));
                 }
+                //return res;
             } else if (path->optional) { // if none of the attempted methods worked, and the path is optional, attempt to resolve to a previous value set by the user.
                 res = resolvePrevValue(path, sub->getPath());
 
@@ -2058,25 +2059,6 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
 
             // merge/concatenate the resolved (or null) value to the final value.
             concatValue = concatSubValue(concatValue, res, sub->interrupts[i]);
-
-            // before resolving the next item in the substitution, add the state of the unfinished value to the stack.
-            if (std::visit(valueExists, concatValue)) {
-                std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
-                Node * find = history.head;
-                while(find->next != path->node) {find = find->next;}
-                convertToStack(concatValue, list, sub->getPath());
-                Node * end = sub->node->next;
-                Node * curr = sub->node;
-                for (auto iter = list.rbegin(); iter != list.rend(); iter++) {
-                    Node * temp = new Node();
-                    temp->obj = iter->second;
-                    temp->path = iter->first;
-                    curr->next = temp;
-                    temp->next = end;
-                    curr = temp;
-                }
-                //getHistory();
-            }
         } else {
             std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> temp;
             switch(value.index()) {
@@ -2107,21 +2089,6 @@ std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> HParser::resolveSub
         if(!remainingSubs.empty()) {
             resolveObj(concatValue, subHistory);
         }
-        std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> list;
-        convertToStack(concatValue, list, sub->getPath());
-        Node * end = sub->node->next;
-        Node * curr = sub->node;
-        std::visit(deleteHObj, curr->obj);
-        curr->obj = concatValue;
-        for (auto iter = list.rbegin() + 1; iter != list.rend(); iter++) {
-            Node * temp = new Node();
-            temp->obj = iter->second;
-            temp->path = iter->first;
-            curr->next = temp;
-            temp->next = end;
-            curr = temp;
-        }
-        //getHistory();
     }
     set.erase(sub);
     return concatValue;
