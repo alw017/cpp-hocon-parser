@@ -124,18 +124,23 @@ public:
     // constructor
     LinkedList(){
         head = nullptr;
-        tail = nullptr;
     }
 
     // destructor
     ~LinkedList(){
+        Node *next = head;
+        
+        while(next) {              // iterate over all elements
+            Node *deleteMe = next;
+            next = next->next;     // save pointer to the next element
+            delete deleteMe;       // delete the current entry
+        }
     }
     
     // This prepends a new value at the beginning of the list
     void appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val, std::vector<std::string> path);
 
     Node * head;
-    Node * tail;
 
     // new stack push process --> for HSub, add a corresponding Node * that is the handle to their specific history entry.  
 };
@@ -216,7 +221,7 @@ class HParser {
         void resolveObj(std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> obj, std::unordered_set<HSubstitution*> history);
         std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePath(HPath* path);
         std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> concatSubValue(std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> source, std::variant<HTree *, HArray *, HSimpleValue*, HSubstitution*> target, bool interrupt);
-        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePrevValue(HPath * pathObj, std::vector<std::string> path);
+        std::variant<HTree*, HArray*, HSimpleValue*, HSubstitution*> resolvePrevValue(int counter, std::vector<std::string> path);
         /*
          * Note: to do substitutions, we need to keep an auxillary file keeping track of all object member additions and modifications
          * also, we need to give the substitution a handle on where to enter the file, if it is a self referential substitution.
