@@ -15,14 +15,6 @@ enum IncludeType {
 struct HArray;
 struct HSimpleValue;
 struct HSubstitution;
-struct Node {
-    std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> obj;
-    Node *next;
-
-    ~Node() {
-        std::visit(deleteHObj, obj);
-    }
-};
 //struct HKey;
 
 struct HTree {
@@ -104,8 +96,6 @@ struct HSubstitution {
     std::variant<HTree*,HArray*> parent;
     size_t substitutionType = 3;
     std::string key;
-    Node * node;
-
     HSubstitution(std::vector<std::variant<HTree*, HArray*, HSimpleValue*, HPath*>> v);
     ~HSubstitution();
     std::string str();
@@ -113,48 +103,10 @@ struct HSubstitution {
     std::vector<std::string> getPath();
 };
 
-class LinkedList{
-    // Struct inside the class LinkedList
-    // This is one node which is not needed by the caller. It is just
-    // for internal work.
-
-// public member
-public:
-    // constructor
-    LinkedList(){
-        head = nullptr;
-    }
-
-    // destructor
-    ~LinkedList(){
-        Node *next = head;
-        
-        while(next) {              // iterate over all elements
-            Node *deleteMe = next;
-            next = next->next;     // save pointer to the next element
-            delete deleteMe;       // delete the current entry
-        }
-    }
-    
-    // This prepends a new value at the beginning of the list
-    void appendValue(std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> val){
-        Node *n = new Node();   // create new Node
-        n->obj = val;             // set value
-        n->next = head;         // make the node point to the next node.
-                                //  If the list is empty, this is NULL, so the end of the list --> OK
-        head = n;               // last but not least, make the head point at the new node.
-    }
-
-    Node * head;
-
-    // new stack push process --> for HSub, add a corresponding Node * that is the handle to their specific history entry.  
-};
-
 class HParser {
     public: // change to private later
         //file properties
         std::vector<std::pair<std::vector<std::string>, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*>>> stack;
-        LinkedList history;
         bool rootBrace = true; // rootBrace must be true if the root object is HArray.
         bool validConf = true;
         std::variant<HTree *, HArray *> rootObject;
@@ -176,7 +128,7 @@ class HParser {
         bool atEnd();
         void getStack();
         void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
-        void addToHistory(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value);
+        void pushStack(std::vector<std::string> rootPath, std::variant<HTree*,HArray*,HSimpleValue*,HSubstitution*> value, HSubstitution *);
 
         //consume
         Token advance();
@@ -235,8 +187,7 @@ class HParser {
         //error reporting
         void error(int line, std::string const& message);
         void report(int line, std::string const& where, std::string const& message);
-
-
+    public:
         bool run(); 
         HParser(std::vector<Token> tokens): tokenList(tokens), length(tokens.size()) {};
         HParser(HTree * newRoot);
